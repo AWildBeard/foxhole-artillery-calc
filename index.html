@@ -25,7 +25,7 @@
                 </div>
                 <input id="input_tar_azim" type="number" class="form-control" tabindex="2" placeholder="from spotter to target" aria-label="from spotter to target">
                 <div class="input-group-append">
-                    <span class="input-group-text">degrees</span>
+                    <span class="input-group-text">mills</span>
                     <button id="btn_swapcourse_tar_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
                 </div>
             </div>
@@ -56,7 +56,7 @@
                 </div>
                 <input id="input_art_azim" type="number" class="form-control" tabindex="101">
                 <div class="input-group-append">
-                    <span class="input-group-text">degrees</span>
+                    <span class="input-group-text">mills</span>
                     <button id="btn_swapcourse_art_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
                 </div>
             </div>
@@ -108,7 +108,7 @@
             <p>You can save <b>firing plans</b> for later use. To do this, add a new plan from the menu and enter a name. The current state will be persisted
             and can be reloaded by selecting it form the firing plan menu. The currently active plan is displayed and by pressing the button,
             you can reset the current values to the stored ones. Note that the correction portion is <i>not</i> restored.</p>
-            <p>Please report bugs and suggestions <a href="https://github.com/earthgrazer/foxhole-artillery-calc/issues" target="_blank">here</a>.</p>
+            <p>This has been modified from EarthGrazer's original work. You can find the original source <a href="https://github.com/earthgrazer/foxhole-artillery-calc/" >here</a>.</p>
         </section>
         <section id="sec_result">
             <h2 style="font-size:20pt">Result</h2>
@@ -163,8 +163,8 @@
                         // we now know the vector from the arty to the next spot.
                         // the backcourse of that is what we need for the next (or final) resolving iteration.
                         art_dist = intermediate_vector.art_tar_dist;
-                        art_azim = artycal.get_backcourse(intermediate_vector.art_tar_deg);
-                        // console.log("resolve TRP #"+trp_idx+":  new_art_dist="+art_dist+"; new_art_azim="+art_azim+" (intermediate_vector.art_tar_deg="+intermediate_vector.art_tar_deg+")");
+                        art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
+                        // console.log("resolve TRP #"+trp_idx+":  new_art_dist="+art_dist+"; new_art_azim="+art_azim+" (intermediate_vector.art_tar_azim="+intermediate_vector.art_tar_azim+")");
                     }
                     
                     
@@ -178,14 +178,14 @@
 
                 // the correction vector is relative to the spotters front (0°=straight in front); so we need to convert to "true north"
                 corr_vector.azim = tar_azim + corr_vector.azim;
-                if (corr_vector.azim > 360) corr_vector.azim = corr_vector.azim - 360;
-                if (corr_vector.azim <   0) corr_vector.azim = corr_vector.azim + 360;
+                if (corr_vector.azim > 6400) corr_vector.azim = corr_vector.azim - 6400;
+                if (corr_vector.azim <    0) corr_vector.azim = corr_vector.azim + 6400;
 
                 // apply correction to final result
                 //console.log("correction vector: (%o) %o", {x:corr_x, y:corr_y}, corr_vector);
                 var intermediate_vector = artycal.calc_artillery(corr_vector.dist, corr_vector.azim, art_dist, art_azim);
                 art_dist = intermediate_vector.art_tar_dist;
-                art_azim = artycal.get_backcourse(intermediate_vector.art_tar_deg);
+                art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
 
 
                 // Calculate corrected vector from arty->spotters target.
@@ -198,12 +198,12 @@
                 }
                 else {
                     // print results
-                    var correction_str = (corr_x != 0 || corr_y != 0)? " =&gt; "+(Math.round(corr_vector.dist*100)/100)+"m/"+(Math.round(corr_vector.azim*100)/100)+"&deg;" : "";
-                    $("#raw_result_div").html("Raw values: [Distance: " + (Math.round(result.art_tar_dist*100)/100) + ", Azimuth: " + (Math.round((result.art_tar_deg)*100)/100)
-                        + " (correction: "+Math.round(artycal.getOpAngleDist(result.art_tar_dist, 1.0)*100)/100+"m/1&deg;"+correction_str+")"
+                    var correction_str = (corr_x != 0 || corr_y != 0)? " =&gt; "+(Math.round(corr_vector.dist*100)/100)+"m/"+(Math.round(corr_vector.azim*100)/100)+"mil" : "";
+                    $("#raw_result_div").html("Raw values: [Distance: " + (Math.round(result.art_tar_dist*100)/100) + ", Azimuth: " + (Math.round((result.art_tar_azim)*100)/100)
+                        + " (correction: "+Math.round(artycal.getOpAngleDist(result.art_tar_dist, 1.0)*100)/100+"m/1mil"+correction_str+")"
                         + "]");
-                    var roundedResultAzim = Math.round(result.art_tar_deg);
-                    if (roundedResultAzim == 360) roundedResultAzim = 0;
+                    var roundedResultAzim = Math.round(result.art_tar_azim);
+                    if (roundedResultAzim == 6400) roundedResultAzim = 0;
                     $("#est_result_div").html("<strong>In-game [Distance: " + artycal.roundTo5(result.art_tar_dist) + "m, Azimuth: " + roundedResultAzim + "]</strong>");
                 }
 
@@ -325,7 +325,7 @@
                             </div>
                             <input id="input_trp_{newTRPid}_azim" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
                             <div class="input-group-append">
-                                <span class="input-group-text">degrees</span>
+                                <span class="input-group-text">mills</span>
                                 <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
                             </div>
                         </div>

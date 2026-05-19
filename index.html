@@ -3,10 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Foxhole Artillery Calculator</title>
+    <title>Allen's Artillery Calculator</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.3/css/bootstrap.min.css" integrity="sha384-Zug+QiDoJOrZ5t4lssLdxGhVrurbmBWopoEl+M6BdEfwnCJZtKxi1KgxUyJq13dy" crossorigin="anonymous">
+    <style>
+        /* Theme variables */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #212529;
+            --input-bg: #ffffff;
+            --input-text: #495057;
+            --input-border: #ced4da;
+            --input-group-bg: #e9ecef;
+            --input-group-text: #495057;
+            --card-bg: #ffffff;
+            --hr-color: #dee2e6;
+            --btn-primary-bg: #007bff;
+            --btn-primary-border: #007bff;
+            --btn-primary-text: #007bff;
+            --btn-secondary-bg: transparent;
+            --btn-secondary-border: #6c757d;
+            --btn-secondary-text: #6c757d;
+            --btn-info-bg: transparent;
+            --btn-info-border: #17a2b8;
+            --btn-info-text: #17a2b8;
+            --btn-danger-border: #dc3545;
+            --btn-danger-text: #dc3545;
+            --dropdown-bg: #ffffff;
+            --dropdown-text: #212529;
+            --dropdown-hover-bg: #f8f9fa;
+            --link-color: #007bff;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #000000;
+            --text-color: #e0e0e0;
+            --input-bg: #1a1a1a;
+            --input-text: #e0e0e0;
+            --input-border: #444444;
+            --input-group-bg: #2a2a2a;
+            --input-group-text: #cccccc;
+            --card-bg: #1a1a1a;
+            --hr-color: #444444;
+            --btn-primary-bg: #5b9bd5;
+            --btn-primary-border: #5b9bd5;
+            --btn-primary-text: #5b9bd5;
+            --btn-secondary-bg: transparent;
+            --btn-secondary-border: #888888;
+            --btn-secondary-text: #bbbbbb;
+            --btn-info-bg: transparent;
+            --btn-info-border: #5bc0de;
+            --btn-info-text: #5bc0de;
+            --btn-danger-border: #ff6b6b;
+            --btn-danger-text: #ff6b6b;
+            --dropdown-bg: #1a1a1a;
+            --dropdown-text: #e0e0e0;
+            --dropdown-hover-bg: #2a2a2a;
+            --link-color: #5b9bd5;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .form-control {
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border-color: var(--input-border);
+        }
+        .form-control:focus {
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border-color: var(--btn-primary-border);
+        }
+        .form-control::placeholder {
+            color: var(--input-group-text);
+            opacity: 0.7;
+        }
+
+        .input-group-text {
+            background-color: var(--input-group-bg);
+            color: var(--input-group-text);
+            border-color: var(--input-border);
+        }
+
+        .btn-outline-primary {
+            color: var(--btn-primary-text);
+            border-color: var(--btn-primary-border);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--btn-primary-bg);
+            color: #ffffff;
+        }
+
+        .btn-outline-secondary {
+            color: var(--btn-secondary-text);
+            border-color: var(--btn-secondary-border);
+        }
+        .btn-outline-secondary:hover {
+            background-color: var(--btn-secondary-border);
+            color: #ffffff;
+        }
+
+        .btn-outline-info {
+            color: var(--btn-info-text);
+            border-color: var(--btn-info-border);
+        }
+        .btn-outline-info:hover {
+            background-color: var(--btn-info-border);
+            color: #ffffff;
+        }
+
+        .btn-outline-danger {
+            color: var(--btn-danger-text);
+            border-color: var(--btn-danger-border);
+        }
+        .btn-outline-danger:hover {
+            background-color: var(--btn-danger-border);
+            color: #ffffff;
+        }
+
+        .btn-outline-dark {
+            color: var(--text-color);
+            border-color: var(--input-border);
+        }
+        .btn-outline-dark:hover {
+            background-color: var(--input-group-bg);
+            color: var(--text-color);
+        }
+
+        .btn-secondary {
+            background-color: var(--input-group-bg);
+            border-color: var(--input-border);
+            color: var(--text-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--input-border);
+        }
+
+        .dropdown-menu {
+            background-color: var(--dropdown-bg);
+            border-color: var(--input-border);
+        }
+        .dropdown-item {
+            color: var(--dropdown-text);
+        }
+        .dropdown-item:hover {
+            background-color: var(--dropdown-hover-bg);
+            color: var(--dropdown-text);
+        }
+        .dropdown-divider {
+            border-top-color: var(--hr-color);
+        }
+
+        hr {
+            border-top-color: var(--hr-color);
+        }
+
+        a {
+            color: var(--link-color);
+        }
+
+        #theme-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            cursor: pointer;
+            background: var(--input-group-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+        #theme-toggle:hover {
+            background: var(--input-border);
+        }
+    </style>
+    <script>
+        // Apply theme immediately to prevent flash
+        (function() {
+            function getCookie(name) {
+                var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                return match ? match[2] : null;
+            }
+            var saved = getCookie('theme');
+            if (saved) {
+                document.documentElement.setAttribute('data-theme', saved);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
 </head>
 <body>
+    <button id="theme-toggle" title="Toggle dark/light theme">&#9790;</button>
     <div class="container">
         <section>
             <h2 style="font-size:20pt">Spotter</h2>
@@ -14,7 +212,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_spotter_alt" type="number" class="form-control" tabindex="0" placeholder="spotter altitude (optional)" aria-label="spotter altitude">
+                <input id="input_spotter_alt" type="number" class="form-control" tabindex="1" placeholder="spotter altitude (optional)" aria-label="spotter altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -27,7 +225,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Distance</span>
                 </div>
-                <input id="input_tar_dist" type="number" class="form-control" tabindex="1" autofocus placeholder="from spotter to target" aria-label="from spotter to target">
+                <input id="input_tar_dist" type="number" class="form-control" tabindex="2" autofocus placeholder="from spotter to target" aria-label="from spotter to target">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -36,17 +234,17 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Azimuth</span>
                 </div>
-                <input id="input_tar_azim" type="number" class="form-control" tabindex="2" placeholder="from spotter to target" aria-label="from spotter to target">
+                <input id="input_tar_azim" type="number" class="form-control" tabindex="3" placeholder="from spotter to target" aria-label="from spotter to target">
                 <div class="input-group-append">
                     <span class="input-group-text">mills</span>
-                    <button id="btn_swapcourse_tar_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
+                    <button id="btn_swapcourse_tar_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1">&#x21c4;</button>
                 </div>
             </div>
             <div class="input-group mb-3">
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_tar_alt" type="number" class="form-control" tabindex="3" placeholder="target altitude (optional)" aria-label="target altitude">
+                <input id="input_tar_alt" type="number" class="form-control" tabindex="4" placeholder="target altitude (optional)" aria-label="target altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -67,7 +265,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Distance</span>
                 </div>
-                <input id="input_art_dist" type="number" class="form-control" tabindex="100">
+                <input id="input_art_dist" type="number" class="form-control" tabindex="50">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -76,17 +274,17 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Azimuth</span>
                 </div>
-                <input id="input_art_azim" type="number" class="form-control" tabindex="101">
+                <input id="input_art_azim" type="number" class="form-control" tabindex="51">
                 <div class="input-group-append">
                     <span class="input-group-text">mills</span>
-                    <button id="btn_swapcourse_art_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
+                    <button id="btn_swapcourse_art_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1">&#x21c4;</button>
                 </div>
             </div>
             <div class="input-group mb-0">
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_art_alt" type="number" class="form-control" tabindex="102" placeholder="artillery altitude (optional)" aria-label="artillery altitude">
+                <input id="input_art_alt" type="number" class="form-control" tabindex="52" placeholder="artillery altitude (optional)" aria-label="artillery altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -95,8 +293,8 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Correction</span>
                 </div>
-                <input id="input_art_corr_dir" type="number" class="form-control" tabindex="103" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
-                <input id="input_art_corr_dist" type="number" class="form-control" tabindex="104" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
+                <input id="input_art_corr_dir" type="number" class="form-control" tabindex="53" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
+                <input id="input_art_corr_dist" type="number" class="form-control" tabindex="54" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
                 <div class="input-group-append">
                     <span class="input-group-text">meters (viewed from spotter)</span>
                 </div>
@@ -104,7 +302,7 @@
         </section>
 
         <section>
-            <button id="btn_compute" type="button" class="btn btn-outline-primary" tabindex="110">Compute</button>
+            <button id="btn_compute" type="button" class="btn btn-outline-primary" tabindex="55">Compute</button>
             <button id="btn_clear_tar" type="button" class="btn btn-outline-secondary">Clear Target</button>
             <button id="btn_clear" type="button" class="btn btn-outline-secondary">Clear All</button>
             |
@@ -133,13 +331,31 @@
                 <li>Input the two sets of values, and the computed result is the distance and azimuth from the artillery to the target.</li>
                 <li>The optional left/right and drop/add correction can be entered as viewed from the spotter in meters. Negative values indicate correction to the left/closer to the spotter.</li>
                 <li>Adjust the artillery settings to match the resulting values, then fire!</li>
-                <li>You can optionally insert linked Target Reference Points between the spotter and the arty, this allows for spotting beyond binocular range.</li>
             </ol>
-            <p>The <strong>In-game values</strong> in the result are rounded to match the in-game increments.</p>
+
+            <h3 style="font-size:16pt">Target Reference Points (TRPs)</h3>
+            <p>TRPs allow you to extend your spotting range beyond what binoculars can reach by chaining intermediate observation points together.</p>
+            <ol>
+                <li>Click <strong>"+ Add Target Reference Point"</strong> to insert a TRP between the spotter and the artillery.</li>
+                <li>Each TRP requires a distance and azimuth measurement from the previous point in the chain (either the spotter or the preceding TRP).</li>
+                <li>You can add multiple TRPs to create a chain: <em>Spotter → TRP #1 → TRP #2 → ... → Artillery</em>.</li>
+                <li>When TRPs are present, the Artillery distance/azimuth fields change to measure from the last TRP to the artillery, rather than from the spotter directly.</li>
+                <li>Altitude can optionally be entered for each TRP to improve accuracy over elevation changes.</li>
+                <li>TRPs are removed in reverse order (last added, first removed) using the <strong>"- remove Target Reference Point"</strong> button.</li>
+            </ol>
+
+            <h3 style="font-size:16pt">Altitude Corrections</h3>
+            <p>If the spotter, target, TRPs, or artillery are at different elevations, entering their altitudes allows the calculator to convert slant distances to horizontal distances for more accurate results.</p>
+
+            <h3 style="font-size:16pt">Firing Plans</h3>
             <p>You can save <b>firing plans</b> for later use. To do this, add a new plan from the menu and enter a name. The current state will be persisted
-            and can be reloaded by selecting it form the firing plan menu. The currently active plan is displayed and by pressing the button,
+            and can be reloaded by selecting it from the firing plan menu. The currently active plan is displayed and by pressing the button,
             you can reset the current values to the stored ones. Note that the correction portion is <i>not</i> restored.</p>
-            <p>This has been modified from EarthGrazer's original work. You can find the original source <a href="https://github.com/earthgrazer/foxhole-artillery-calc/" >here</a>.</p>
+
+            <h3 style="font-size:16pt">Results</h3>
+            <p>The <strong>In-game values</strong> are rounded to the nearest whole number. The <strong>Raw values</strong> show the unrounded computed result for reference.</p>
+
+            <p>This has been modified from EarthGrazer's original work for the FoxHole Video Game. You can find the original source <a href="https://github.com/earthgrazer/foxhole-artillery-calc/" >here</a>.</p>
         </section>
         <section id="sec_result">
             <h2 style="font-size:20pt">Result</h2>
@@ -280,7 +496,7 @@
                         + "]");
                     var roundedResultAzim = Math.round(result.art_tar_azim);
                     if (roundedResultAzim == 6400) roundedResultAzim = 0;
-                    $("#est_result_div").html("<strong>In-game [Distance: " + artycal.roundTo5(result.art_tar_dist) + "m, Azimuth: " + roundedResultAzim + "]</strong>");
+                    $("#est_result_div").html("<strong>In-game [Distance: " + Math.round(result.art_tar_dist) + "m, Azimuth: " + roundedResultAzim + "]</strong>");
                 }
 
                 $("#sec_result").show();
@@ -409,14 +625,14 @@
                             <input id="input_trp_{newTRPid}_azim" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
                             <div class="input-group-append">
                                 <span class="input-group-text">mills</span>
-                                <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
+                                <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1">&#x21c4;</button>
                             </div>
                         </div>
                         <div class="input-group mb-3">
                             <div class="input-group-prepend">
                                 <span class="input-group-text" style="width:5.5em">Altitude</span>
                             </div>
-                            <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters">
+                            <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters" tabindex="{tabindex_alt}">
                             <div class="input-group-append">
                                 <span class="input-group-text">meters</span>
                             </div>
@@ -427,8 +643,10 @@
                 // finally add templated HTML container for the TRP
                 html_template = html_template.replace(/{prevTRPid}/g,     prevTRPid);
                 html_template = html_template.replace(/{newTRPid}/g,      newTRPid);
-                html_template = html_template.replace(/{tabindex_dist}/g,  99-newTRPid);
-                html_template = html_template.replace(/{tabindex_azim}/g, 100-newTRPid);
+                var trp_tab_base = 10 + (newTRPid - 1) * 3;
+                html_template = html_template.replace(/{tabindex_dist}/g, trp_tab_base);
+                html_template = html_template.replace(/{tabindex_azim}/g, trp_tab_base + 1);
+                html_template = html_template.replace(/{tabindex_alt}/g,  trp_tab_base + 2);
                 $("#container_additional_trps").prepend(html_template);
                 
                 $("#btn_swapcourse_trp_"+newTRPid+"_azim").click(function() {
@@ -456,7 +674,7 @@
             ****************************/
             
             // init stored plans
-            const firingplans_storagename = "foxhole-artillery-calc_firingplans";
+            const firingplans_storagename = "allens-artillery-calc_firingplans";
             var firingplans = JSON.parse(localStorage.getItem(firingplans_storagename));
             if (firingplans == null) firingplans = [];
             $("#firingplans_add_input").hide();
@@ -669,6 +887,35 @@
                     updateFireplanSubmenuState();
                 }
              });
+        });
+
+        // Theme toggle
+        function getCookie(name) {
+            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        function setCookie(name, value, days) {
+            var d = new Date();
+            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
+        }
+        function getCurrentTheme() {
+            return document.documentElement.getAttribute('data-theme') || 'light';
+        }
+        function updateToggleIcon() {
+            var btn = document.getElementById('theme-toggle');
+            btn.innerHTML = getCurrentTheme() === 'dark' ? '&#9788;' : '&#9790;';
+        }
+        updateToggleIcon();
+        document.getElementById('theme-toggle').addEventListener('click', function() {
+            var newTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+            if (newTheme === 'light') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', newTheme);
+            }
+            setCookie('theme', newTheme, 365);
+            updateToggleIcon();
         });
     </script>
 </body>

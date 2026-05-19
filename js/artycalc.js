@@ -47,7 +47,8 @@ var artycal = (function() {
     }
 
     /**
-     * Foxhole only allows distance adjustments in 5 meter increments. Round number to the nearest multiple of five.
+     * @DEPRECATED
+     * @DESCRIPTION - DEPRECATED! Foxhole only allows distance adjustments in 5 meter increments. Round number to the nearest multiple of five.
      * @param num Number to round
      * @returns {number}
      */

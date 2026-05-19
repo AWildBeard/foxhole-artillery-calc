@@ -69,26 +69,19 @@ var artycal = (function() {
      * @returns {dist:dist, azim:azim}
      */
     inst.cartesianToPolar = function(xa, ya, xb, yb) {
-        // calculate distance from artillery to target
-        var dist = Math.sqrt(Math.pow(xa - xb, 2) + Math.pow(ya - yb, 2));
-        // calculate azimuth from artillery to target (in milliradians)
+        var dx = xb - xa;
+        var dy = yb - ya;
+
+        // calculate distance from point A to point B
+        var dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
+
+        // calculate azimuth from point A to point B, in milliradians
         var azim = 0;
         if (dist > 0) {
-            azim = radians_to_mils(Math.asin(Math.abs(xb) / dist));
-        }
-
-        // adjust milliradians based on what quadrant the target is located relative to the artillery
-        if (xb < 0 && yb >= 0) {
-            // Target is in second quadrant
-            azim = 6400 - azim;
-        }
-        else if (xb < 0 && yb < 0) {
-            // Target is in third quadrant
-            azim = 3200 + azim;
-        }
-        else if (xb >= 0 && yb < 0) {
-            // Target is in fourth quadrant
-            azim = 3200 - azim;
+            azim = radians_to_mils(Math.atan2(dx, dy));
+            if (azim < 0) {
+                azim += 6400;
+            }
         }
 
         if (isNaN(dist) || isNaN(azim)) {

@@ -9,6 +9,19 @@
 <body>
     <div class="container">
         <section>
+            <h2 style="font-size:20pt">Spotter</h2>
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" style="width:5.5em">Altitude</span>
+                </div>
+                <input id="input_spotter_alt" type="number" class="form-control" tabindex="0" placeholder="spotter altitude (optional)" aria-label="spotter altitude">
+                <div class="input-group-append">
+                    <span class="input-group-text">meters</span>
+                </div>
+            </div>
+        </section>
+
+        <section>
             <h2 style="font-size:20pt">Target</h2>
             <div class="input-group mb-0">
                 <div class="input-group-prepend">
@@ -19,7 +32,7 @@
                     <span class="input-group-text">meters</span>
                 </div>
             </div>
-            <div class="input-group mb-3">
+            <div class="input-group mb-0">
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Azimuth</span>
                 </div>
@@ -27,6 +40,15 @@
                 <div class="input-group-append">
                     <span class="input-group-text">mills</span>
                     <button id="btn_swapcourse_tar_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
+                </div>
+            </div>
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" style="width:5.5em">Altitude</span>
+                </div>
+                <input id="input_tar_alt" type="number" class="form-control" tabindex="3" placeholder="target altitude (optional)" aria-label="target altitude">
+                <div class="input-group-append">
+                    <span class="input-group-text">meters</span>
                 </div>
             </div>
         </section>
@@ -60,12 +82,21 @@
                     <button id="btn_swapcourse_art_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
                 </div>
             </div>
+            <div class="input-group mb-0">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" style="width:5.5em">Altitude</span>
+                </div>
+                <input id="input_art_alt" type="number" class="form-control" tabindex="102" placeholder="artillery altitude (optional)" aria-label="artillery altitude">
+                <div class="input-group-append">
+                    <span class="input-group-text">meters</span>
+                </div>
+            </div>
             <div class="input-group mb-3">
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Correction</span>
                 </div>
-                <input id="input_art_corr_dir" type="number" class="form-control" tabindex="102" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
-                <input id="input_art_corr_dist" type="number" class="form-control" tabindex="103" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
+                <input id="input_art_corr_dir" type="number" class="form-control" tabindex="103" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
+                <input id="input_art_corr_dist" type="number" class="form-control" tabindex="104" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
                 <div class="input-group-append">
                     <span class="input-group-text">meters (viewed from spotter)</span>
                 </div>
@@ -143,12 +174,34 @@
                     var trp_idx      = trp_list[i];
                     var trp_art_dist = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_dist").val()) : art_dist;
                     var trp_art_azim = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_azim").val()) : art_azim;
+                    var trp_alt      = parseFloat($("#input_trp_"+trp_idx+"_alt").val()); if (isNaN(trp_alt)) trp_alt = 0;
                     // console.log("resolve TRP #"+trp_idx+":  trp_art_azim="+trp_art_azim+"; trp_art_azim="+trp_art_azim);
+                    
+                    // Altitude correction: convert slant distance to horizontal distance for this TRP leg
+                    if (i==0) {
+                        // First TRP: distance is from spotter, correct using spotter vs TRP altitude
+                        var trp_prev_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(trp_prev_alt)) trp_prev_alt = 0;
+                    } else {
+                        // Subsequent TRPs: distance was already resolved horizontally, no additional correction needed
+                        var trp_prev_alt = trp_alt; // no-op: dh will be 0
+                    }
+                    var dh_trp = trp_alt - trp_prev_alt;
+                    if (i==0 && trp_art_dist * trp_art_dist - dh_trp * dh_trp > 0) {
+                        trp_art_dist = Math.sqrt(trp_art_dist * trp_art_dist - dh_trp * dh_trp);
+                    }
                     
                     // get vector from this TRP to the next one (either another TRP or original spotter->arty)
                     var next_src     = (i<trp_list.length-1)?  "#input_trp_"+trp_list[i+1] : "#input_art";
                     var next_dist    = parseFloat($(next_src+"_dist").val());
                     var next_azim_to = parseFloat($(next_src+"_azim").val());
+                    
+                    // Altitude correction for the next leg distance (from this TRP to next point)
+                    var next_alt = (i<trp_list.length-1)? parseFloat($("#input_trp_"+trp_list[i+1]+"_alt").val()) : parseFloat($("#input_art_alt").val());
+                    if (isNaN(next_alt)) next_alt = 0;
+                    var dh_next = next_alt - trp_alt;
+                    if (next_dist * next_dist - dh_next * dh_next > 0) {
+                        next_dist = Math.sqrt(next_dist * next_dist - dh_next * dh_next);
+                    }
                     var next_azim    = artycal.get_backcourse(next_azim_to); // the data points towards us, but we need it to point from us to them
                     // console.log("resolve TRP #"+trp_idx+":  next_dist="+next_dist+"; next_azim="+next_azim+" (backcourse from "+next_src+"_azim="+next_azim_to+")");
                     
@@ -190,6 +243,29 @@
 
                 // Calculate corrected vector from arty->spotters target.
                 // Either that is directly that from the spotter, or the resolved intermediate_vector from the TRP chain
+                // Altitude adjustment: convert slant distances (from spotter) to horizontal distances
+                // The spotter measures slant-line distances; we need horizontal distances for the 2D vector math.
+                var spotter_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(spotter_alt)) spotter_alt = 0;
+                var tar_alt     = parseFloat($("#input_tar_alt").val());     if (isNaN(tar_alt))     tar_alt = 0;
+                var art_alt     = parseFloat($("#input_art_alt").val());     if (isNaN(art_alt))     art_alt = 0;
+
+                console.log("uncorrected target distance: ", tar_dist)
+                // Convert spotter-to-target slant distance to horizontal distance
+                var dh_tar = tar_alt - spotter_alt;
+                if (tar_dist * tar_dist - dh_tar * dh_tar > 0) {
+                    tar_dist = Math.sqrt(tar_dist * tar_dist - dh_tar * dh_tar);
+                }
+
+                console.log("corrected target distance: ", tar_dist)
+                console.log("uncorrected artillery distance: ", art_dist)
+
+                // Convert spotter-to-artillery slant distance to horizontal distance
+                var dh_art = art_alt - spotter_alt;
+                if (art_dist * art_dist - dh_art * dh_art > 0) {
+                    art_dist = Math.sqrt(art_dist * art_dist - dh_art * dh_art);
+                }
+                console.log("corrected artillery distance: ", art_dist)
+
                 var result = artycal.calc_artillery(tar_dist, tar_azim, art_dist, art_azim);
 
                 if (result.hasOwnProperty("error")) {
@@ -223,10 +299,13 @@
             $("#btn_clear").click(function() {
                 $("#input_tar_dist").val("").focus();
                 $("#input_tar_azim").val("");
+                $("#input_tar_alt").val("");
                 $("#input_art_dist").val("");
                 $("#input_art_azim").val("");
+                $("#input_art_alt").val("");
                 $("#input_art_corr_dir").val("");
                 $("#input_art_corr_dist").val("");
+                $("#input_spotter_alt").val("");
                 for (var i=trp_list.length; i>0; i--) {
                     dropLastTRP();
                 };
@@ -238,6 +317,7 @@
             $("#btn_clear_tar").click(function() {
                 $("#input_tar_dist").val("").focus();
                 $("#input_tar_azim").val("");
+                $("#input_tar_alt").val("");
             });
 
             $("#btn_info").click(function() {
@@ -256,6 +336,9 @@
             $("#input_art_azim").keyup(function(e){       if(e.which == 13)  $("#btn_compute").click();  });
             $("#input_art_corr_dir").keyup(function(e){   if(e.which == 13)  $("#btn_compute").click();  });
             $("#input_art_corr_dist").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
+            $("#input_spotter_alt").keyup(function(e){    if(e.which == 13)  $("#btn_compute").click();  });
+            $("#input_tar_alt").keyup(function(e){        if(e.which == 13)  $("#btn_compute").click();  });
+            $("#input_art_alt").keyup(function(e){        if(e.which == 13)  $("#btn_compute").click();  });
             
             
             
@@ -319,7 +402,7 @@
                                 <span class="input-group-text">meters</span>
                             </div>
                         </div>
-                        <div class="input-group mb-3">
+                        <div class="input-group mb-0">
                             <div class="input-group-prepend">
                                 <span class="input-group-text" style="width:5.5em">Azimuth</span>
                             </div>
@@ -327,6 +410,15 @@
                             <div class="input-group-append">
                                 <span class="input-group-text">mills</span>
                                 <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse">&#x21c4;</button>
+                            </div>
+                        </div>
+                        <div class="input-group mb-3">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text" style="width:5.5em">Altitude</span>
+                            </div>
+                            <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters">
+                            <div class="input-group-append">
+                                <span class="input-group-text">meters</span>
                             </div>
                         </div>
                     </section>
@@ -345,6 +437,7 @@
                 });
                 $("#input_trp_"+newTRPid+"_dist").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
                 $("#input_trp_"+newTRPid+"_azim").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
+                $("#input_trp_"+newTRPid+"_alt").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
                 
                 $("#input_trp_"+newTRPid+"_dist").focus();
                 
@@ -381,13 +474,18 @@
                 var fp_struct =
                 {
                     name:name,
+                    spotter:{
+                        alt:parseFloat($("#input_spotter_alt").val())
+                    },
                     tgt:{
                         dist:parseFloat($("#input_tar_dist").val()),
-                        azim:parseFloat($("#input_tar_azim").val())
+                        azim:parseFloat($("#input_tar_azim").val()),
+                        alt:parseFloat($("#input_tar_alt").val())
                     },
                     art:{
                         dist:parseFloat($("#input_art_dist").val()),
                         azim:parseFloat($("#input_art_azim").val()),
+                        alt:parseFloat($("#input_art_alt").val()),
                         corr:{
                             dir:parseFloat($("#input_art_corr_dir").val()),
                             dist:parseFloat($("#input_art_corr_dist").val())
@@ -402,7 +500,8 @@
                     fp_struct.trps.push({
                         id:trp_idx,
                         dist:parseFloat($("#input_trp_"+trp_idx+"_dist").val()),
-                        azim:parseFloat($("#input_trp_"+trp_idx+"_azim").val())
+                        azim:parseFloat($("#input_trp_"+trp_idx+"_azim").val()),
+                        alt:parseFloat($("#input_trp_"+trp_idx+"_alt").val())
                     });
                 }
                 
@@ -415,20 +514,26 @@
                 //console.log("load fireplan: %i=%o", id, fp);
                 $("#btn_clear").click();  // clean out everything set so far
                 
+                // restore spotter altitude
+                if (fp.spotter) $("#input_spotter_alt").val(fp.spotter.alt);
+                
                 // restore spotter->tgt leg
                 $("#input_tar_dist").val(fp.tgt.dist);
                 $("#input_tar_azim").val(fp.tgt.azim);
+                if (fp.tgt.alt) $("#input_tar_alt").val(fp.tgt.alt);
                 
                 // restore optional TRPs
                 for (var trp_idx=0; trp_idx<fp.trps.length; trp_idx++) {
                     $('#btn_add_trp').click();
                     $("#input_trp_"+ (trp_idx+1) +"_dist").val(fp.trps[trp_idx].dist);
                     $("#input_trp_"+ (trp_idx+1) +"_azim").val(fp.trps[trp_idx].azim);
+                    if (fp.trps[trp_idx].alt) $("#input_trp_"+ (trp_idx+1) +"_alt").val(fp.trps[trp_idx].alt);
                 }
                 
                 // restore spotter||trp -> arty leg
                 $("#input_art_dist").val(fp.art.dist);
                 $("#input_art_azim").val(fp.art.azim);
+                if (fp.art.alt) $("#input_art_alt").val(fp.art.alt);
                 
                 // Do not restore correction: its depending on wind
                 //$("#input_art_corr_dir").val(fp.art.corr.dir);

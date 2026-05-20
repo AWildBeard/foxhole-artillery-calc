@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Wrangler local state (build cache, dev session, miniflare data)
+.wrangler/
+
+# Local secrets — never commit. Use `wrangler secret put` for production.
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+
+# Build output (if a future bundler emits here)
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

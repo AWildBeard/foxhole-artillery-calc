@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Allen's Artillery Calculator</title>
+    <title>Artillery Calculator</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.3/css/bootstrap.min.css" integrity="sha384-Zug+QiDoJOrZ5t4lssLdxGhVrurbmBWopoEl+M6BdEfwnCJZtKxi1KgxUyJq13dy" crossorigin="anonymous">
     <style>
-        /* Theme variables */
         :root {
             --bg-color: #ffffff;
             --text-color: #212529;
@@ -32,6 +31,7 @@
             --dropdown-text: #212529;
             --dropdown-hover-bg: #f8f9fa;
             --link-color: #007bff;
+            --nav-bg: #f8f9fa;
         }
 
         [data-theme="dark"] {
@@ -59,6 +59,7 @@
             --dropdown-text: #e0e0e0;
             --dropdown-hover-bg: #2a2a2a;
             --link-color: #5b9bd5;
+            --nav-bg: #111111;
         }
 
         body {
@@ -165,30 +166,444 @@
             color: var(--link-color);
         }
 
-        #theme-toggle {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
+        /* Top navbar */
+        #topnav {
+            display: flex;
+            align-items: center;
+            padding: 6px 16px;
+            border-bottom: 1px solid var(--hr-color);
+            background-color: var(--nav-bg);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            gap: 4px;
+        }
+
+        .nav-tab {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            padding: 6px 14px;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .nav-tab:hover { background-color: var(--input-group-bg); }
+        .nav-tab.active {
+            background-color: var(--input-group-bg);
+            font-weight: 600;
+        }
+
+        #nav-spacer { flex: 1; }
+
+        #nav-session {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #conn-status {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: var(--input-group-bg);
+            white-space: nowrap;
+        }
+        #conn-status.connected { color: #28a745; }
+        #conn-status.disconnected { color: #dc3545; }
+
+        #theme-toggle {
             background: var(--input-group-bg);
             border: 1px solid var(--input-border);
             color: var(--text-color);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            font-size: 18px;
+            width: 36px;
+            height: 36px;
+            font-size: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background-color 0.3s;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-left: 8px;
         }
-        #theme-toggle:hover {
-            background: var(--input-border);
+        #theme-toggle:hover { background: var(--input-border); }
+
+        /* Broker UI */
+        .broker-step {
+            max-width: 640px;
+            margin: 40px auto;
         }
+
+        .battery-item {
+            padding: 10px 14px;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 6px;
+            background: var(--input-bg);
+            transition: border-color 0.15s;
+        }
+        .battery-item:hover { border-color: var(--btn-primary-border); }
+        .battery-item.selected {
+            border-color: var(--btn-primary-border);
+            background: var(--input-group-bg);
+            font-weight: 600;
+        }
+
+        .fm-item {
+            padding: 10px 14px;
+            border: 1px solid var(--hr-color);
+            border-radius: 4px;
+            margin-bottom: 6px;
+            background: var(--input-group-bg);
+        }
+        .fm-item.fm-pending { border-left: 4px solid #ffc107; }
+        .fm-item.fm-fired   { border-left: 4px solid #28a745; opacity: 0.7; }
+
+        .badge-pending {
+            background: #ffc107; color: #000; padding: 2px 8px;
+            border-radius: 10px; font-size: 11px; font-weight: 600;
+        }
+        .badge-fired {
+            background: #28a745; color: #fff; padding: 2px 8px;
+            border-radius: 10px; font-size: 11px; font-weight: 600;
+        }
+
+        .target-row {
+            padding: 12px;
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            margin-bottom: 10px;
+            background: var(--card-bg);
+        }
+        .target-row.is-sent { border-left: 4px solid #28a745; }
+        .target-row.is-queued { border-left: 4px solid #ffc107; }
+        .target-row.is-pending { border-left: 4px solid var(--hr-color); }
+
+        /* Target card header: two columns — info chips flow on the left,
+           action buttons stay pinned top-right. */
+        .target-row .row-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .target-row .row-head-main {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 6px;
+            align-items: center;
+            overflow-wrap: anywhere;
+        }
+        .target-row .row-head-actions {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 4px;
+        }
+        /* Keep the card from blowing out the viewport on tiny screens. */
+        .target-row { max-width: 100%; overflow-wrap: anywhere; }
+
+        /* Battery summary uses flex-wrap so multiple batteries flow horizontally
+           when there's room and stack vertically on narrow viewports. */
+        #broker-battery-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .battery-summary {
+            flex: 1 1 240px;
+            min-width: 220px;
+            padding: 6px 12px;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            background: var(--input-group-bg);
+            font-size: 13px;
+        }
+        /* When the section is collapsed, hide content but keep the heading row visible. */
+        #broker-battery-summary.is-hidden { display: none; }
+
+        /* Small, neutral info pill for grid/altitude/battery tags shown on
+           the target card after a mission has been delivered. */
+        .info-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            background: var(--input-group-bg);
+            color: var(--text-color);
+            border: 1px solid var(--input-border);
+            font-family: monospace;
+        }
+
+        /* Mode-toggle button on the target row (Grid <-> Az/Dist). */
+        .input-mode-toggle {
+            white-space: nowrap;
+        }
+
+        /* ===== Hamburger nav (narrow viewports) ===== */
+        #nav-hamburger {
+            display: none;
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 22px;
+            line-height: 1;
+        }
+        #nav-hamburger:hover { background: var(--input-group-bg); }
+        .nav-tabs-container { display: flex; gap: 4px; align-items: center; position: relative; }
+
+        /* ===== Buttons with icon + optional text =====
+           .btn-icon = the leading glyph, always visible
+           .btn-text = the wider-viewport label, hidden below sm */
+        .btn-icon {
+            font-family: "Segoe UI Symbol", "Apple Symbols", sans-serif;
+            display: inline-block;
+            font-size: 1.05em;
+            line-height: 1;
+            vertical-align: -1px;
+        }
+        .btn-text { display: inline; }
+
+        /* ===== Narrow-viewport overrides ===== */
+        @media (max-width: 575px) {
+            /* Smaller body text overall. */
+            body { font-size: 13px; }
+
+            /* Inline headings used 20pt / 16pt; shrink on phones. */
+            h2 { font-size: 16pt !important; }
+            h3 { font-size: 13pt !important; }
+
+            /* Tighter navbar, hide tab labels behind hamburger. */
+            #topnav { padding: 4px 10px; gap: 2px; }
+            .nav-tab { padding: 4px 10px; font-size: 13px; }
+            #nav-hamburger { display: inline-block; }
+            .nav-tabs-container {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 8px;
+                background: var(--nav-bg);
+                border: 1px solid var(--hr-color);
+                border-radius: 6px;
+                padding: 6px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 2px;
+                z-index: 250;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                min-width: 160px;
+            }
+            .nav-tabs-container.open { display: flex; }
+            .nav-tabs-container .nav-tab { text-align: left; }
+
+            /* Connection status: keep dot, drop the word. */
+            #conn-status .conn-text { display: none; }
+            #conn-status { padding: 2px 6px; }
+
+            /* Hide wider-viewport labels inside icon-first buttons. */
+            .btn-text { display: none; }
+
+            /* Theme toggle smaller. */
+            #theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+
+            /* Tighter cards. */
+            .target-row { padding: 10px; }
+            .broker-step { margin: 20px auto; }
+
+            /* Tighter input groups. */
+            .input-group-text { padding: 4px 8px; font-size: 12px; }
+
+            /* Battery summary: full-width items on narrow viewports. */
+            .battery-summary { flex-basis: 100%; }
+
+            /* Tighter row-head spacing. */
+            .target-row .row-head { gap: 4px; }
+
+            /* Fire mission card top row already wraps; keep gap minimal. */
+            .fm-item { padding: 8px 10px; }
+
+            /* Smaller FM ID / info pills on mobile. */
+            .fm-id-badge, .info-pill { font-size: 10px; padding: 1px 6px; }
+            .pill { font-size: 10px; }
+        }
+
+        /* On wide viewports, the icon is decorative — give the text a little
+           breathing room from the leading glyph. */
+        @media (min-width: 576px) {
+            .btn-icon + .btn-text { margin-left: 4px; }
+        }
+
+        /* Fire-mission card header: same 2-column treatment — info chips
+           wrap on the left, the action button stays pinned top-right. */
+        .fm-item { max-width: 100%; overflow-wrap: anywhere; }
+        .fm-item .fm-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .fm-item .fm-head-main {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 6px;
+            align-items: center;
+        }
+        .fm-item .fm-head-actions {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 4px;
+        }
+
+        /* Adjustment details: tighter summary styling. */
+        details.adjustment-section > summary {
+            cursor: pointer;
+            user-select: none;
+            font-size: 12px;
+            color: var(--input-group-text);
+            padding: 6px 0;
+            list-style: none;
+        }
+        details.adjustment-section > summary::-webkit-details-marker { display: none; }
+        details.adjustment-section > summary::before {
+            content: '\25B8'; /* right-pointing triangle */
+            display: inline-block;
+            margin-right: 6px;
+            transition: transform 0.15s;
+        }
+        details.adjustment-section[open] > summary::before { transform: rotate(90deg); }
+        details.adjustment-section.disabled > summary { color: var(--input-group-text); opacity: 0.5; pointer-events: none; }
+
+        .fm-id-badge {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--input-group-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-color);
+        }
+
+        .target-label-display {
+            font-weight: 600;
+            cursor: text;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px dashed transparent;
+        }
+        .target-label-display:hover {
+            border-color: var(--input-border);
+        }
+
+        .target-label-edit {
+            font-size: 14px;
+            font-weight: 600;
+            padding: 2px 6px;
+            min-width: 120px;
+        }
+
+        /* Locked inputs (after first delivery) */
+        .form-control[readonly], .form-control:disabled {
+            background: var(--input-group-bg);
+            opacity: 0.85;
+        }
+
+        /* Disclosure for solution history */
+        .solution-history {
+            margin-top: 6px;
+        }
+        .solution-history summary {
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--input-group-text);
+            user-select: none;
+            padding: 4px 0;
+        }
+        .solution-history summary:hover { color: var(--text-color); }
+        .solution-history .history-entry {
+            padding: 6px 10px;
+            margin: 4px 0 4px 14px;
+            border-left: 2px solid var(--hr-color);
+            font-size: 12px;
+        }
+        .solution-history .history-entry.initial { border-left-color: #17a2b8; }
+        .solution-history .history-entry.adjustment { border-left-color: #ffc107; }
+        .solution-history .history-entry.current { background: var(--input-group-bg); }
+
+        .adjustment-section {
+            margin: 8px 0;
+            padding: 8px;
+            border: 1px dashed var(--input-border);
+            border-radius: 4px;
+            background: rgba(127, 127, 127, 0.04);
+        }
+        .adjustment-section.disabled { opacity: 0.5; }
+        .adjustment-section-header {
+            font-size: 12px;
+            color: var(--input-group-text);
+            margin-bottom: 4px;
+        }
+
+        /* Status pills */
+        .pill {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .pill-queued   { background: var(--input-group-bg); color: var(--text-color); }
+        .pill-pending  { background: #ffc107; color: #000; }
+        .pill-sent     { background: #17a2b8; color: #fff; }
+        .pill-delivered{ background: #28a745; color: #fff; }
+        .pill-fired    { background: #28a745; color: #fff; }
+
+        /* Spotter-view solution rows. Pill (DELIVERED / PROPOSED / PREVIEW)
+           sits inline with the "In-game [...]" line on wide viewports, and
+           drops onto its own line on narrow viewports so the solution text
+           isn't squeezed.
+
+           Wide: default inline flow keeps pill + <strong> on one line.
+           Narrow: become a flex column so each child sits on its own row. */
+        .solution-line { margin-bottom: 4px; }
+        .solution-line .pill { margin-right: 6px; }
+        @media (max-width: 575px) {
+            .solution-line {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 2px;
+            }
+            .solution-line .pill { margin-right: 0; }
+        }
+
+        .role-card {
+            padding: 24px 16px;
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            background: var(--input-bg);
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .role-card:hover {
+            border-color: var(--btn-primary-border);
+            background: var(--input-group-bg);
+        }
+
+        .text-muted-themed { color: var(--input-group-text); }
+        .badge-online { background: #28a745; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
     </style>
     <script>
-        // Apply theme immediately to prevent flash
         (function() {
             function getCookie(name) {
                 var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -204,8 +619,32 @@
     </script>
 </head>
 <body>
-    <button id="theme-toggle" title="Toggle dark/light theme">&#9790;</button>
-    <div class="container">
+
+    <!-- TOP NAVBAR -->
+    <div id="topnav">
+        <button id="nav-hamburger" aria-label="Open navigation menu" title="Menu">&#9776;</button>
+        <div class="nav-tabs-container">
+            <button class="nav-tab active" id="nav-tools-btn">Tools</button>
+            <button class="nav-tab" id="nav-broker-btn">Broker</button>
+        </div>
+        <div id="nav-spacer"></div>
+        <div id="nav-session" style="display:none">
+            <span id="conn-status" class="connected" title="Connection status">
+                <span class="conn-dot">&#9679;</span>
+                <span class="conn-text"> Connected</span>
+            </span>
+            <button id="btn-reconnect-session" class="btn btn-sm btn-outline-info" title="Restart the WebSocket connection while keeping all entered data" aria-label="Reconnect">
+                <span class="btn-icon">&#x21bb;</span><span class="btn-text">Reconnect</span>
+            </button>
+            <button id="btn-leave-session" class="btn btn-sm btn-outline-danger" title="Leave the session" aria-label="Leave Session">
+                <span class="btn-icon">&#x23FB;</span><span class="btn-text">Leave</span>
+            </button>
+        </div>
+        <button id="theme-toggle" title="Toggle dark/light theme">&#9790;</button>
+    </div>
+
+    <!-- ==================== TOOLS VIEW ==================== -->
+    <div id="view-tools" class="container">
         <section>
             <h2 style="font-size:20pt">Spotter</h2>
             <div class="input-group mb-3">
@@ -255,7 +694,7 @@
             <hr/>
             <button id="btn_add_trp" class="btn btn-secondary btn-sm">+ Add Target Reference Point</button>
             <button id="btn_del_trp" class="btn btn-outline-danger btn-sm">- remove Target Reference Point</button>
-            <div id="container_additional_trps"><!-- Info: New TRPs stack up here --></div>
+            <div id="container_additional_trps"></div>
             <hr/>
         </section>
 
@@ -322,6 +761,7 @@
             |
             <button id="btn_info" type="button" class="btn btn-outline-info">Info</button>
         </section>
+
         <section id="sec_info">
             <h2 style="font-size:20pt">Information</h2>
             <p>To use this calculator:</p>
@@ -338,7 +778,7 @@
             <ol>
                 <li>Click <strong>"+ Add Target Reference Point"</strong> to insert a TRP between the spotter and the artillery.</li>
                 <li>Each TRP requires a distance and azimuth measurement from the previous point in the chain (either the spotter or the preceding TRP).</li>
-                <li>You can add multiple TRPs to create a chain: <em>Spotter → TRP #1 → TRP #2 → ... → Artillery</em>.</li>
+                <li>You can add multiple TRPs to create a chain: <em>Spotter &rarr; TRP #1 &rarr; TRP #2 &rarr; ... &rarr; Artillery</em>.</li>
                 <li>When TRPs are present, the Artillery distance/azimuth fields change to measure from the last TRP to the artillery, rather than from the spotter directly.</li>
                 <li>Altitude can optionally be entered for each TRP to improve accuracy over elevation changes.</li>
                 <li>TRPs are removed in reverse order (last added, first removed) using the <strong>"- remove Target Reference Point"</strong> button.</li>
@@ -355,568 +795,1724 @@
             <h3 style="font-size:16pt">Results</h3>
             <p>The <strong>In-game values</strong> are rounded to the nearest whole number. The <strong>Raw values</strong> show the unrounded computed result for reference.</p>
 
-            <p>This has been modified from EarthGrazer's original work for the FoxHole Video Game. You can find the original source <a href="https://github.com/earthgrazer/foxhole-artillery-calc/" >here</a>.</p>
+            <p>This has been modified from EarthGrazer's original work for the FoxHole Video Game. You can find the original source <a href="https://github.com/earthgrazer/foxhole-artillery-calc/">here</a>.</p>
         </section>
+
         <section id="sec_result">
             <h2 style="font-size:20pt">Result</h2>
             <div id="est_result_div"></div>
             <div id="raw_result_div" style="font-size:small"></div>
         </section>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-fQybjgWLrvvRgtW6bFlB7jaZrFsaBXjsOMm/tB9LTS58ONXgqbR9W8oWht/amnpF" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="./js/artycalc.js"></script>
-    <script type="text/javascript">
-        $(document).ready(function() {
-            $("#sec_result").hide();
+    </div><!-- /view-tools -->
 
-            $("#btn_compute").click(function() {
-                // final leg spotter->tgt
-                var tar_dist = parseFloat($("#input_tar_dist").val());
-                var tar_azim = parseFloat($("#input_tar_azim").val());
-                
-                // leg spotter -> arty||trp1
-                var art_dist = parseFloat($("#input_art_dist").val());
-                var art_azim = parseFloat($("#input_art_azim").val());
-                
-                // Resolve optional TRPs in between and thus create a new big leg spotter->arty.
-                // We walk the TRPs from the arty to the target and resolve each new TRP into a
-                // iteratively growing final vector. All resolved intermediate vectors replace the last spotter->arty vector in the end.
-                // For the first TRP (as seen from arty) we need the vector, however subsequent lookups need the previuos intermediate_vector
-                // console.log("resolving "+trp_list.length+" TRPs");
-                for (var i=0; i<trp_list.length; i++) {
-                    // get this TRPs vector to the arty.
-                    // (for the nearest TRP this is its stored azimut, all others in the chain need the resolved intermediate_vector value)
-                    var trp_idx      = trp_list[i];
-                    var trp_art_dist = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_dist").val()) : art_dist;
-                    var trp_art_azim = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_azim").val()) : art_azim;
-                    var trp_alt      = parseFloat($("#input_trp_"+trp_idx+"_alt").val()); if (isNaN(trp_alt)) trp_alt = 0;
-                    // console.log("resolve TRP #"+trp_idx+":  trp_art_azim="+trp_art_azim+"; trp_art_azim="+trp_art_azim);
-                    
-                    // Altitude correction: convert slant distance to horizontal distance for this TRP leg
-                    if (i==0) {
-                        // First TRP: distance is from spotter, correct using spotter vs TRP altitude
-                        var trp_prev_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(trp_prev_alt)) trp_prev_alt = 0;
-                    } else {
-                        // Subsequent TRPs: distance was already resolved horizontally, no additional correction needed
-                        var trp_prev_alt = trp_alt; // no-op: dh will be 0
-                    }
-                    var dh_trp = trp_alt - trp_prev_alt;
-                    if (i==0 && trp_art_dist * trp_art_dist - dh_trp * dh_trp > 0) {
-                        trp_art_dist = Math.sqrt(trp_art_dist * trp_art_dist - dh_trp * dh_trp);
-                    }
-                    
-                    // get vector from this TRP to the next one (either another TRP or original spotter->arty)
-                    var next_src     = (i<trp_list.length-1)?  "#input_trp_"+trp_list[i+1] : "#input_art";
-                    var next_dist    = parseFloat($(next_src+"_dist").val());
-                    var next_azim_to = parseFloat($(next_src+"_azim").val());
-                    
-                    // Altitude correction for the next leg distance (from this TRP to next point)
-                    var next_alt = (i<trp_list.length-1)? parseFloat($("#input_trp_"+trp_list[i+1]+"_alt").val()) : parseFloat($("#input_art_alt").val());
-                    if (isNaN(next_alt)) next_alt = 0;
-                    var dh_next = next_alt - trp_alt;
-                    if (next_dist * next_dist - dh_next * dh_next > 0) {
-                        next_dist = Math.sqrt(next_dist * next_dist - dh_next * dh_next);
-                    }
-                    var next_azim    = artycal.get_backcourse(next_azim_to); // the data points towards us, but we need it to point from us to them
-                    // console.log("resolve TRP #"+trp_idx+":  next_dist="+next_dist+"; next_azim="+next_azim+" (backcourse from "+next_src+"_azim="+next_azim_to+")");
-                    
-                    // calculate dist+azim from arty to the next point
-                    var intermediate_vector = artycal.calc_artillery(next_dist, next_azim, trp_art_dist, trp_art_azim);
-                    if (intermediate_vector.hasOwnProperty("error")) {
-                        $("#raw_result_div").html("Error in TRP #"+trp_idx+" input value(s)");
-                        $("#est_result_div").html("");
-                        $("#sec_result").show();
-                        return;
-                    } else {
-                        // we now know the vector from the arty to the next spot.
-                        // the backcourse of that is what we need for the next (or final) resolving iteration.
-                        art_dist = intermediate_vector.art_tar_dist;
-                        art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
-                        // console.log("resolve TRP #"+trp_idx+":  new_art_dist="+art_dist+"; new_art_azim="+art_azim+" (intermediate_vector.art_tar_azim="+intermediate_vector.art_tar_azim+")");
-                    }
-                    
-                    
-                }
+    <!-- ==================== BROKER VIEW ==================== -->
+    <div id="view-broker" class="container" style="display:none">
 
-                // Optionally apply correction.
-                // We do this by calculating a "hidden TRP" which reflects the correction as viewed from the forward observer.
-                var corr_x = parseFloat($("#input_art_corr_dir").val());  if (isNaN(corr_x)) corr_x=0;
-                var corr_y = parseFloat($("#input_art_corr_dist").val()); if (isNaN(corr_y)) corr_y=0;
-                var corr_vector = artycal.cartesianToPolar(0, 0, corr_x, corr_y);
+        <!-- Step 1: OP Code entry -->
+        <div id="broker-entry" class="broker-step">
+            <h2 style="font-size:20pt">Artillery Broker</h2>
+            <p class="text-muted-themed">Enter an OP Code to join a shared session. Spotters and batteries that use the same code can coordinate fire missions in real time.</p>
+            <p class="text-muted-themed" style="font-size:12px">OP Code may contain letters, numbers, hyphens, and underscores (max 32 characters).</p>
+            <div class="input-group mb-3">
+                <input id="broker-opcode-input" type="text" class="form-control" maxlength="32"
+                    placeholder="OP Code" autofocus>
+                <div class="input-group-append">
+                    <button id="btn-broker-enter" class="btn btn-outline-primary">Enter</button>
+                </div>
+            </div>
+            <div id="broker-entry-error" class="text-danger" style="display:none"></div>
+        </div>
 
-                // the correction vector is relative to the spotters front (0°=straight in front); so we need to convert to "true north"
-                corr_vector.azim = tar_azim + corr_vector.azim;
-                if (corr_vector.azim > 6400) corr_vector.azim = corr_vector.azim - 6400;
-                if (corr_vector.azim <    0) corr_vector.azim = corr_vector.azim + 6400;
+        <!-- Step 2: Role selection -->
+        <div id="broker-role-select" class="broker-step" style="display:none">
+            <h2 style="font-size:20pt">Select Role</h2>
+            <p>OP Code: <strong id="display-opcode"></strong></p>
+            <div class="row mt-3">
+                <div class="col-6">
+                    <div class="role-card" id="btn-role-artillery">
+                        <div style="font-size:18px; font-weight:600; margin-bottom:6px">Artillery</div>
+                        <div style="font-size:13px; color:var(--input-group-text)">Register a battery position and receive fire missions from spotters</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="role-card" id="btn-role-spotter">
+                        <div style="font-size:18px; font-weight:600; margin-bottom:6px">Spotter</div>
+                        <div style="font-size:13px; color:var(--input-group-text)">Designate targets and send fire missions to online batteries</div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                // apply correction to final result
-                //console.log("correction vector: (%o) %o", {x:corr_x, y:corr_y}, corr_vector);
-                var intermediate_vector = artycal.calc_artillery(corr_vector.dist, corr_vector.azim, art_dist, art_azim);
-                art_dist = intermediate_vector.art_tar_dist;
-                art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
-
-
-                // Calculate corrected vector from arty->spotters target.
-                // Either that is directly that from the spotter, or the resolved intermediate_vector from the TRP chain
-                // Altitude adjustment: convert slant distances (from spotter) to horizontal distances
-                // The spotter measures slant-line distances; we need horizontal distances for the 2D vector math.
-                var spotter_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(spotter_alt)) spotter_alt = 0;
-                var tar_alt     = parseFloat($("#input_tar_alt").val());     if (isNaN(tar_alt))     tar_alt = 0;
-                var art_alt     = parseFloat($("#input_art_alt").val());     if (isNaN(art_alt))     art_alt = 0;
-
-                console.log("uncorrected target distance: ", tar_dist)
-                // Convert spotter-to-target slant distance to horizontal distance
-                var dh_tar = tar_alt - spotter_alt;
-                if (tar_dist * tar_dist - dh_tar * dh_tar > 0) {
-                    tar_dist = Math.sqrt(tar_dist * tar_dist - dh_tar * dh_tar);
-                }
-
-                console.log("corrected target distance: ", tar_dist)
-                console.log("uncorrected artillery distance: ", art_dist)
-
-                // Convert spotter-to-artillery slant distance to horizontal distance
-                var dh_art = art_alt - spotter_alt;
-                if (art_dist * art_dist - dh_art * dh_art > 0) {
-                    art_dist = Math.sqrt(art_dist * art_dist - dh_art * dh_art);
-                }
-                console.log("corrected artillery distance: ", art_dist)
-
-                var result = artycal.calc_artillery(tar_dist, tar_azim, art_dist, art_azim);
-
-                if (result.hasOwnProperty("error")) {
-                    $("#raw_result_div").html("Error in input value(s)");
-                    $("#est_result_div").html("");
-                }
-                else {
-                    // print results
-                    var correction_str = (corr_x != 0 || corr_y != 0)? " =&gt; "+(Math.round(corr_vector.dist*100)/100)+"m/"+(Math.round(corr_vector.azim*100)/100)+"mil" : "";
-                    $("#raw_result_div").html("Raw values: [Distance: " + (Math.round(result.art_tar_dist*100)/100) + ", Azimuth: " + (Math.round((result.art_tar_azim)*100)/100)
-                        + " (correction: "+Math.round(artycal.getOpAngleDist(result.art_tar_dist, 1.0)*100)/100+"m/1mil"+correction_str+")"
-                        + "]");
-                    var roundedResultAzim = Math.round(result.art_tar_azim);
-                    if (roundedResultAzim == 6400) roundedResultAzim = 0;
-                    $("#est_result_div").html("<strong>In-game [Distance: " + Math.round(result.art_tar_dist) + "m, Azimuth: " + roundedResultAzim + "]</strong>");
-                }
-
-                $("#sec_result").show();
-                $("#sec_info").hide();
-            });
-            
-            $('#btn_swapcourse_tar_azim').click(function() {
-                var backcourse = artycal.get_backcourse( parseFloat($("#input_tar_azim").val()) );
-                $("#input_tar_azim").val( backcourse );
-            });
-            $('#btn_swapcourse_art_azim').click(function() {
-                var backcourse = artycal.get_backcourse( parseFloat($("#input_art_azim").val()) );
-                $("#input_art_azim").val( backcourse );
-            });
-
-            $("#btn_clear").click(function() {
-                $("#input_tar_dist").val("").focus();
-                $("#input_tar_azim").val("");
-                $("#input_tar_alt").val("");
-                $("#input_art_dist").val("");
-                $("#input_art_azim").val("");
-                $("#input_art_alt").val("");
-                $("#input_art_corr_dir").val("");
-                $("#input_art_corr_dist").val("");
-                $("#input_spotter_alt").val("");
-                for (var i=trp_list.length; i>0; i--) {
-                    dropLastTRP();
-                };
-                active_plan_id = -1;
-                $("#firingplans_menu_btn").html("Firing plans");
-                updateFireplanSubmenuState();
-            });
-
-            $("#btn_clear_tar").click(function() {
-                $("#input_tar_dist").val("").focus();
-                $("#input_tar_azim").val("");
-                $("#input_tar_alt").val("");
-            });
-
-            $("#btn_info").click(function() {
-                $("#sec_result").hide();
-                $("#sec_info").show();
-            });
-
-            $("input").focus(function() {
-                $(this).select();
-            });
-            
-            /* Iput fields try to calculate when hitting ENTER */
-            $("#input_tar_dist").keyup(function(e){       if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_tar_azim").keyup(function(e){       if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_art_dist").keyup(function(e){       if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_art_azim").keyup(function(e){       if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_art_corr_dir").keyup(function(e){   if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_art_corr_dist").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_spotter_alt").keyup(function(e){    if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_tar_alt").keyup(function(e){        if(e.which == 13)  $("#btn_compute").click();  });
-            $("#input_art_alt").keyup(function(e){        if(e.which == 13)  $("#btn_compute").click();  });
-            
-            
-            
-            /***********************
-            * TRP functionality    *
-            ************************/
-            let trp_list = []; // list of trp indexes
-            var update_trp_buttonstate = function() {
-                // update TRPs texts
-                for (var i=0; i<trp_list.length; i++) {
-                    var m = "-";
-                    if (i==trp_list.length-1) {
-                        m = "from spotter to TRP #"+trp_list[i];
-                    } else {
-                        m = "from TRP #"+trp_list[i+1]+" to TRP #"+trp_list[i];
-                    }
-                    $("#input_trp_"+trp_list[i]+"_dist").attr("placeholder", m);
-                    $("#input_trp_"+trp_list[i]+"_dist").attr("aria-label", m);
-                    $("#input_trp_"+trp_list[i]+"_azim").attr("placeholder", m);
-                    $("#input_trp_"+trp_list[i]+"_azim").attr("aria-label", m);
-                }
-            
-                // update arty text
-                var m = "from spotter to artillery";
-                if (trp_list.length > 0) {
-                    var lasTRPIdx = trp_list[0];
-                    $("#btn_del_trp").show();
-                    m = "from TRP #"+lasTRPIdx+" to artillery";
-                } else {
-                    $("#btn_del_trp").hide();
-                    var m = "from spotter to artillery";
-                }
-                $("#input_art_dist").attr("placeholder", m);
-                $("#input_art_dist").attr("aria-label", m);
-                $("#input_art_azim").attr("placeholder", m);
-                $("#input_art_azim").attr("aria-label", m);
-            };
-            update_trp_buttonstate();
-            
-            var dropLastTRP = function() {
-                var lastID =  trp_list.pop();
-                $("#trp_"+lastID).remove();
-                update_trp_buttonstate();
-            }
-            
-            $('#btn_add_trp').click(function() {
-                // Adds a new TRP to the selection
-                var prevTRPid     = trp_list[trp_list.length];
-                var newTRPid      = trp_list.length+1;
-                trp_list.push(newTRPid);
-                
-                // prepare simple HTML template
-                var html_template = `<section id="trp_{newTRPid}">
-                        <h2 style="font-size:20pt">Target Reference Point (TRP) #{newTRPid}</h2>
-                        <div class="input-group mb-0">
+        <!-- Artillery role -->
+        <div id="broker-arty-view" style="display:none">
+            <!-- Setup form (shown until battery goes online) -->
+            <div id="arty-setup-section">
+                <h2 style="font-size:20pt">Artillery Battery</h2>
+                <p class="text-muted-themed">Enter your battery's grid and altitude to come online. Spotters in this session will be able to see your battery and send fire missions.</p>
+                <!-- Callsign is set once for the session and cannot be changed afterwards. -->
+                <div class="input-group mb-3">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text" style="width:5.5em">Callsign</span>
+                    </div>
+                    <input id="arty-callsign-input" type="text" class="form-control" maxlength="18"
+                        pattern="[A-Za-z0-9_-]+"
+                        placeholder="Optional — letters, numbers, _ or - (max 18)">
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="input-group mb-3">
                             <div class="input-group-prepend">
-                                <span class="input-group-text" style="width:5.5em">Distance</span>
+                                <span class="input-group-text" style="width:5.5em">Grid</span>
                             </div>
-                            <input id="input_trp_{newTRPid}_dist" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_dist}">
-                            <div class="input-group-append">
-                                <span class="input-group-text">meters</span>
-                            </div>
+                            <input id="arty-grid-input" type="text" class="form-control" maxlength="10"
+                                placeholder="6, 8, or 10-digit grid" autofocus>
                         </div>
-                        <div class="input-group mb-0">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text" style="width:5.5em">Azimuth</span>
-                            </div>
-                            <input id="input_trp_{newTRPid}_azim" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
-                            <div class="input-group-append">
-                                <span class="input-group-text">mills</span>
-                                <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1">&#x21c4;</button>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="col-md-6">
                         <div class="input-group mb-3">
                             <div class="input-group-prepend">
                                 <span class="input-group-text" style="width:5.5em">Altitude</span>
                             </div>
-                            <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters" tabindex="{tabindex_alt}">
+                            <input id="arty-alt-input" type="number" class="form-control" placeholder="Battery altitude">
                             <div class="input-group-append">
-                                <span class="input-group-text">meters</span>
+                                <span class="input-group-text">m</span>
                             </div>
                         </div>
-                    </section>
-                `;
-                // replace variables in the template and
-                // finally add templated HTML container for the TRP
-                html_template = html_template.replace(/{prevTRPid}/g,     prevTRPid);
-                html_template = html_template.replace(/{newTRPid}/g,      newTRPid);
-                var trp_tab_base = 10 + (newTRPid - 1) * 3;
-                html_template = html_template.replace(/{tabindex_dist}/g, trp_tab_base);
-                html_template = html_template.replace(/{tabindex_azim}/g, trp_tab_base + 1);
-                html_template = html_template.replace(/{tabindex_alt}/g,  trp_tab_base + 2);
-                $("#container_additional_trps").prepend(html_template);
-                
-                $("#btn_swapcourse_trp_"+newTRPid+"_azim").click(function() {
-                    var backcourse = artycal.get_backcourse( parseFloat($("#input_trp_"+newTRPid+"_azim").val()) );
-                    $("#input_trp_"+newTRPid+"_azim").val( backcourse );
-                });
-                $("#input_trp_"+newTRPid+"_dist").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
-                $("#input_trp_"+newTRPid+"_azim").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
-                $("#input_trp_"+newTRPid+"_alt").keyup(function(e){  if(e.which == 13)  $("#btn_compute").click();  });
-                
-                $("#input_trp_"+newTRPid+"_dist").focus();
-                
-                update_trp_buttonstate();
-            });
-            
-            
-            $("#btn_del_trp").click(function() {
-                dropLastTRP();
-            });
-            
-            
-            
-            /****************************
-            * Load/save/del firing plan *
-            ****************************/
-            
-            // init stored plans
-            const firingplans_storagename = "allens-artillery-calc_firingplans";
-            var firingplans = JSON.parse(localStorage.getItem(firingplans_storagename));
-            if (firingplans == null) firingplans = [];
-            $("#firingplans_add_input").hide();
-            var active_plan_id = -1;
-            
-            // Function stores cleaned version of the data array
-            var persist_firingplans = function() {
-                var firingplans_clean = firingplans.filter(data => data != null);
-                localStorage.setItem(firingplans_storagename, JSON.stringify(firingplans_clean));
-                //console.log("persisted: %o", firingplans_clean);
-            };
-            
-            // Function makes new fireplan structure based on current input state
-            var newFireplanFromcurrent = function(name) {
-                var fp_struct =
-                {
-                    name:name,
-                    spotter:{
-                        alt:parseFloat($("#input_spotter_alt").val())
-                    },
-                    tgt:{
-                        dist:parseFloat($("#input_tar_dist").val()),
-                        azim:parseFloat($("#input_tar_azim").val()),
-                        alt:parseFloat($("#input_tar_alt").val())
-                    },
-                    art:{
-                        dist:parseFloat($("#input_art_dist").val()),
-                        azim:parseFloat($("#input_art_azim").val()),
-                        alt:parseFloat($("#input_art_alt").val()),
-                        corr:{
-                            dir:parseFloat($("#input_art_corr_dir").val()),
-                            dist:parseFloat($("#input_art_corr_dist").val())
-                        }
-                    },
-                    trps:[]
-                };
-                
-                // add optional TRPs
-                for (var i=0; i<trp_list.length; i++) {
-                    var trp_idx = trp_list[i];
-                    fp_struct.trps.push({
-                        id:trp_idx,
-                        dist:parseFloat($("#input_trp_"+trp_idx+"_dist").val()),
-                        azim:parseFloat($("#input_trp_"+trp_idx+"_azim").val()),
-                        alt:parseFloat($("#input_trp_"+trp_idx+"_alt").val())
-                    });
+                    </div>
+                </div>
+                <button id="btn-arty-online" class="btn btn-outline-primary">Go Online</button>
+                <div id="arty-setup-error" class="text-danger mt-2" style="display:none"></div>
+            </div>
+
+            <!-- Online status + incoming fire missions -->
+            <div id="arty-online-section" style="display:none">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap">
+                    <h2 style="font-size:20pt; margin:0">Artillery Battery</h2>
+                    <span class="badge-online">ONLINE</span>
+                    <span id="arty-callsign-display" style="font-weight:600"></span>
+                    <button id="btn-arty-standdown" class="btn btn-sm btn-outline-secondary" style="margin-left:auto" title="Stop accepting fire missions but stay in the session">Stand Down</button>
+                </div>
+                <p>Grid: <code id="arty-grid-display"></code> &bull; Altitude: <span id="arty-alt-display"></span>m</p>
+                <hr/>
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; flex-wrap:wrap">
+                    <h3 style="font-size:16pt; margin:0">Incoming Fire Missions</h3>
+                    <span id="missions-stats" class="text-muted-themed" style="font-size:13px"></span>
+                    <button id="btn-clear-fired" class="btn btn-sm btn-outline-secondary" style="margin-left:auto" title="Remove all missions marked as fired" aria-label="Clear fired missions">
+                        <span class="btn-icon">&#10005;</span><span class="btn-text">Clear Fired</span>
+                    </button>
+                </div>
+                <p id="arty-no-missions" class="text-muted-themed">Waiting for fire missions from spotters&hellip;</p>
+                <div id="fire-missions-list"></div>
+            </div>
+        </div>
+
+        <!-- Spotter role -->
+        <div id="broker-spotter-view" style="display:none">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; flex-wrap:wrap">
+                <h2 style="font-size:20pt; margin:0">Spotter</h2>
+                <span id="spotter-stats" class="text-muted-themed" style="font-size:13px"></span>
+            </div>
+
+            <!-- Optional session-level spotter grid. Provides a default
+                 spotter->target azimuth for adjustment math across all targets.
+                 Each target row may override with a directly-observed azimuth. -->
+            <h3 style="font-size:16pt">Spotter Grid <small class="text-muted-themed" style="font-size:12px">(optional — for static spotting)</small></h3>
+            <div class="input-group mb-2" style="max-width:520px">
+                <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Grid</span></div>
+                <input id="spotter-self-grid" type="text" class="form-control" maxlength="10" placeholder="6, 8, or 10-digit grid (change as you move)">
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-top:14px; margin-bottom:6px">
+                <h3 style="font-size:16pt; margin:0">Online Batteries</h3>
+                <span id="batteries-count" class="text-muted-themed" style="font-size:13px"></span>
+                <button id="btn-toggle-batteries" class="btn btn-sm btn-outline-secondary" style="margin-left:auto" title="Show/hide the battery list" aria-label="Show online batteries">
+                    <span class="btn-icon">&#9662;</span><span class="btn-text">Show</span>
+                </button>
+            </div>
+            <div id="broker-battery-summary" class="is-hidden">
+                <p class="text-muted-themed">No batteries online in this session.</p>
+            </div>
+
+            <hr/>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+                <h3 style="font-size:16pt; margin:0">Target Queue</h3>
+                <button id="btn-add-target" class="btn btn-sm btn-outline-primary" title="Add a new target" aria-label="Add target">
+                    <span class="btn-icon">&#x2a01;</span><span class="btn-text">Add Target</span>
+                </button>
+                <button id="btn-send-all-targets" class="btn btn-sm btn-outline-primary" title="Send every queued target that has a battery and a valid grid" aria-label="Send all queued">
+                    <span class="btn-icon">&#10148;</span><span class="btn-text">Send All</span>
+                </button>
+                <button id="btn-clear-sent-targets" class="btn btn-sm btn-outline-secondary" title="Remove every target that has already been sent" aria-label="Clear sent">
+                    <span class="btn-icon">&#10005;</span><span class="btn-text">Clear Sent</span>
+                </button>
+            </div>
+
+            <div id="spotter-targets-container">
+                <p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>
+            </div>
+        </div>
+
+    </div><!-- /view-broker -->
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-fQybjgWLrvvRgtW6bFlB7jaZrFsaBXjsOMm/tB9LTS58ONXgqbR9W8oWht/amnpF" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="./js/artycalc.js"></script>
+    <script type="text/javascript" src="./js/broker.js"></script>
+    <script type="text/javascript">
+
+    // ========================
+    // NAV / VIEW SWITCHING
+    // ========================
+    function showView(view) {
+        $('#view-tools, #view-broker').hide();
+        $('#view-' + view).show();
+        $('#nav-tools-btn, #nav-broker-btn').removeClass('active');
+        $('#nav-' + view + '-btn').addClass('active');
+    }
+
+    function closeHamburger() { $('.nav-tabs-container').removeClass('open'); }
+    $('#nav-tools-btn').click(function() { showView('tools'); closeHamburger(); });
+    $('#nav-broker-btn').click(function() { showView('broker'); closeHamburger(); });
+
+    // Hamburger menu (narrow viewports only — CSS controls visibility).
+    $('#nav-hamburger').click(function(e) {
+        e.stopPropagation();
+        $('.nav-tabs-container').toggleClass('open');
+    });
+    // Click outside to close.
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('#topnav').length) closeHamburger();
+    });
+
+    // ========================
+    // TOOLS / CALCULATOR
+    // ========================
+    $(document).ready(function() {
+        $("#sec_result").hide();
+
+        $("#btn_compute").click(function() {
+            var tar_dist = parseFloat($("#input_tar_dist").val());
+            var tar_azim = parseFloat($("#input_tar_azim").val());
+            var art_dist = parseFloat($("#input_art_dist").val());
+            var art_azim = parseFloat($("#input_art_azim").val());
+
+            for (var i=0; i<trp_list.length; i++) {
+                var trp_idx      = trp_list[i];
+                var trp_art_dist = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_dist").val()) : art_dist;
+                var trp_art_azim = (i==0)? parseFloat($("#input_trp_"+trp_idx+"_azim").val()) : art_azim;
+                var trp_alt      = parseFloat($("#input_trp_"+trp_idx+"_alt").val()); if (isNaN(trp_alt)) trp_alt = 0;
+
+                if (i==0) {
+                    var trp_prev_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(trp_prev_alt)) trp_prev_alt = 0;
+                } else {
+                    var trp_prev_alt = trp_alt;
                 }
-                
-                return fp_struct;
-            };
-            
-            // loads a given firingplan to the input fields
-            var loadFiringplan = function(id) {
-                var fp = firingplans[id];
-                //console.log("load fireplan: %i=%o", id, fp);
-                $("#btn_clear").click();  // clean out everything set so far
-                
-                // restore spotter altitude
-                if (fp.spotter) $("#input_spotter_alt").val(fp.spotter.alt);
-                
-                // restore spotter->tgt leg
-                $("#input_tar_dist").val(fp.tgt.dist);
-                $("#input_tar_azim").val(fp.tgt.azim);
-                if (fp.tgt.alt) $("#input_tar_alt").val(fp.tgt.alt);
-                
-                // restore optional TRPs
-                for (var trp_idx=0; trp_idx<fp.trps.length; trp_idx++) {
-                    $('#btn_add_trp').click();
-                    $("#input_trp_"+ (trp_idx+1) +"_dist").val(fp.trps[trp_idx].dist);
-                    $("#input_trp_"+ (trp_idx+1) +"_azim").val(fp.trps[trp_idx].azim);
-                    if (fp.trps[trp_idx].alt) $("#input_trp_"+ (trp_idx+1) +"_alt").val(fp.trps[trp_idx].alt);
-                }
-                
-                // restore spotter||trp -> arty leg
-                $("#input_art_dist").val(fp.art.dist);
-                $("#input_art_azim").val(fp.art.azim);
-                if (fp.art.alt) $("#input_art_alt").val(fp.art.alt);
-                
-                // Do not restore correction: its depending on wind
-                //$("#input_art_corr_dir").val(fp.art.corr.dir);
-                //$("#input_art_corr_dist").val(fp.art.corr.dist);
-                
-                // when loading a firingplan, set it active
-                $("#firingplans_menu_btn").html(firingplans[id].name);
-                active_plan_id = id;
-                
-                // when loading a firingplan, clear previous results
-                $("#raw_result_div").html("");
-                $("#est_result_div").html("");
-                
-                updateFireplanSubmenuState();
-            };
-            
-            // Add a fireplan to the list and storage
-            // If newPlanID is not null, the storage is not adjusted and the given Id used as reference
-            // returns ID of the added plan
-            var globalUnique_newPlanID = firingplans.length;
-            var addFiringplan = function(fp, newPlanID=null) {
-                if (newPlanID == null) {
-                    newPlanID              = globalUnique_newPlanID++;
-                    firingplans[newPlanID] = fp;
-                    active_plan_id         = newPlanID;
-                    persist_firingplans();
-                    $("#firingplans_menu_btn").html(firingplans[newPlanID].name);
-                }
-                
-                $("#firingplans_menu").append("<button class=\"dropdown-item\" type=\"button\" id=\"firingplans_plan_"+newPlanID+"\">"+firingplans[newPlanID].name+"</button>");
-                $("#firingplans_plan_"+newPlanID).click(function(e){
-                    //console.log("Fireplan item clicked, active plan="+active_plan_id+"; newPlanID="+newPlanID+"; this_id=%o", $(this));
-                    loadFiringplan(newPlanID);
-                });
-                
-                return newPlanID;
-            }
-            
-            // Updates the menus accessibility
-            var updateFireplanSubmenuState = function() {
-                // visible per default
-                $("#firingplans_menu_add").removeAttr("disabled");
-                $("#firingplans_menu_del").removeAttr("disabled");
-                $("#firingplans_menu_save").removeAttr("disabled");
-                $(":button[id*=firingplans_plan_]").removeAttr("disabled");
-            
-                // no active plan selected: disable del and save buttons
-                // (note: also the case when no plan is stored at all)
-                var firingplans_clean = firingplans.filter(data => data != null);
-                //console.log("DBG: active = "+active_plan_id+"; l="+firingplans_clean.length);
-                if (active_plan_id < 0 || firingplans_clean.length == 0 ) {
-                    $("#firingplans_menu_del").attr("disabled","");
-                    $("#firingplans_menu_save").attr("disabled","");
+                var dh_trp = trp_alt - trp_prev_alt;
+                if (i==0 && trp_art_dist * trp_art_dist - dh_trp * dh_trp > 0) {
+                    trp_art_dist = Math.sqrt(trp_art_dist * trp_art_dist - dh_trp * dh_trp);
                 }
 
-                // menu not accessible when input element is active
-                if ($("#firingplans_add_input").is(":visible")) {
-                    $("#firingplans_menu_add").attr("disabled","");
-                    $("#firingplans_menu_del").attr("disabled","");
-                    $("#firingplans_menu_save").attr("disabled","");
-                    $(":button[id*=firingplans_plan_]").attr("disabled","");
+                var next_src     = (i<trp_list.length-1)? "#input_trp_"+trp_list[i+1] : "#input_art";
+                var next_dist    = parseFloat($(next_src+"_dist").val());
+                var next_azim_to = parseFloat($(next_src+"_azim").val());
+
+                var next_alt = (i<trp_list.length-1)? parseFloat($("#input_trp_"+trp_list[i+1]+"_alt").val()) : parseFloat($("#input_art_alt").val());
+                if (isNaN(next_alt)) next_alt = 0;
+                var dh_next = next_alt - trp_alt;
+                if (next_dist * next_dist - dh_next * dh_next > 0) {
+                    next_dist = Math.sqrt(next_dist * next_dist - dh_next * dh_next);
                 }
-                
-                // No save and del option when no firingplan is active
-                var firingplans_clean = firingplans.filter(data => data != null);
-                if (active_plan_id < 0) {
-                    $("#firingplans_menu_del").attr("disabled","");
-                    $("#firingplans_menu_save").attr("disabled","");
+                var next_azim = artycal.get_backcourse(next_azim_to);
+
+                var intermediate_vector = artycal.calc_artillery(next_dist, next_azim, trp_art_dist, trp_art_azim);
+                if (intermediate_vector.hasOwnProperty("error")) {
+                    $("#raw_result_div").html("Error in TRP #"+trp_idx+" input value(s)");
+                    $("#est_result_div").html("");
+                    $("#sec_result").show();
+                    return;
+                } else {
+                    art_dist = intermediate_vector.art_tar_dist;
+                    art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
                 }
-            };
-            
-            
-            // Initialize dropdown values from stored content
-            //console.log("loading "+firingplans.length+" fireplans");
-            for (var i=0;i<firingplans.length; i++) {
-                addFiringplan(firingplans[i], i);
-                //console.log("  Fireplan "+i+": %o", firingplans[i]);
             }
+
+            var corr_x = parseFloat($("#input_art_corr_dir").val());  if (isNaN(corr_x)) corr_x=0;
+            var corr_y = parseFloat($("#input_art_corr_dist").val()); if (isNaN(corr_y)) corr_y=0;
+            var corr_vector = artycal.cartesianToPolar(0, 0, corr_x, corr_y);
+            corr_vector.azim = tar_azim + corr_vector.azim;
+            if (corr_vector.azim > 6400) corr_vector.azim = corr_vector.azim - 6400;
+            if (corr_vector.azim <    0) corr_vector.azim = corr_vector.azim + 6400;
+
+            var intermediate_vector = artycal.calc_artillery(corr_vector.dist, corr_vector.azim, art_dist, art_azim);
+            art_dist = intermediate_vector.art_tar_dist;
+            art_azim = artycal.get_backcourse(intermediate_vector.art_tar_azim);
+
+            var spotter_alt = parseFloat($("#input_spotter_alt").val()); if (isNaN(spotter_alt)) spotter_alt = 0;
+            var tar_alt     = parseFloat($("#input_tar_alt").val());     if (isNaN(tar_alt))     tar_alt = 0;
+            var art_alt     = parseFloat($("#input_art_alt").val());     if (isNaN(art_alt))     art_alt = 0;
+
+            var dh_tar = tar_alt - spotter_alt;
+            if (tar_dist * tar_dist - dh_tar * dh_tar > 0) {
+                tar_dist = Math.sqrt(tar_dist * tar_dist - dh_tar * dh_tar);
+            }
+
+            var dh_art = art_alt - spotter_alt;
+            if (art_dist * art_dist - dh_art * dh_art > 0) {
+                art_dist = Math.sqrt(art_dist * art_dist - dh_art * dh_art);
+            }
+
+            var result = artycal.calc_artillery(tar_dist, tar_azim, art_dist, art_azim);
+
+            if (result.hasOwnProperty("error")) {
+                $("#raw_result_div").html("Error in input value(s)");
+                $("#est_result_div").html("");
+            } else {
+                var correction_str = (corr_x != 0 || corr_y != 0)? " =&gt; "+(Math.round(corr_vector.dist*100)/100)+"m/"+(Math.round(corr_vector.azim*100)/100)+"mil" : "";
+                $("#raw_result_div").html("Raw values: [Distance: " + (Math.round(result.art_tar_dist*100)/100) + ", Azimuth: " + (Math.round((result.art_tar_azim)*100)/100)
+                    + " (correction: "+Math.round(artycal.getOpAngleDist(result.art_tar_dist, 1.0)*100)/100+"m/1mil"+correction_str+")"
+                    + "]");
+                var roundedResultAzim = Math.round(result.art_tar_azim);
+                if (roundedResultAzim == 6400) roundedResultAzim = 0;
+                $("#est_result_div").html("<strong>Dis: " + Math.round(result.art_tar_dist) + "m / Az: " + roundedResultAzim + "mil</strong>");
+            }
+
+            $("#sec_result").show();
+            $("#sec_info").hide();
+        });
+
+        $('#btn_swapcourse_tar_azim').click(function() {
+            $("#input_tar_azim").val(artycal.get_backcourse(parseFloat($("#input_tar_azim").val())));
+        });
+        $('#btn_swapcourse_art_azim').click(function() {
+            $("#input_art_azim").val(artycal.get_backcourse(parseFloat($("#input_art_azim").val())));
+        });
+
+        $("#btn_clear").click(function() {
+            $("#input_tar_dist").val("").focus();
+            $("#input_tar_azim").val("");
+            $("#input_tar_alt").val("");
+            $("#input_art_dist").val("");
+            $("#input_art_azim").val("");
+            $("#input_art_alt").val("");
+            $("#input_art_corr_dir").val("");
+            $("#input_art_corr_dist").val("");
+            $("#input_spotter_alt").val("");
+            for (var i=trp_list.length; i>0; i--) { dropLastTRP(); }
+            active_plan_id = -1;
+            $("#firingplans_menu_btn").html("Firing plans");
             updateFireplanSubmenuState();
-            
-            // DropDown actions
-            $("#firingplans_menu_add").click(function() {
-                // add button shows the input field
-                $("#firingplans_add_input").show();
-                $("#firingplans_add_input").focus();
-                updateFireplanSubmenuState();
+        });
+
+        $("#btn_clear_tar").click(function() {
+            $("#input_tar_dist").val("").focus();
+            $("#input_tar_azim").val("");
+            $("#input_tar_alt").val("");
+        });
+
+        $("#btn_info").click(function() {
+            $("#sec_result").hide();
+            $("#sec_info").show();
+        });
+
+        $("input").focus(function() { $(this).select(); });
+
+        $("#input_tar_dist").keyup(function(e){      if(e.which==13) $("#btn_compute").click(); });
+        $("#input_tar_azim").keyup(function(e){      if(e.which==13) $("#btn_compute").click(); });
+        $("#input_art_dist").keyup(function(e){      if(e.which==13) $("#btn_compute").click(); });
+        $("#input_art_azim").keyup(function(e){      if(e.which==13) $("#btn_compute").click(); });
+        $("#input_art_corr_dir").keyup(function(e){  if(e.which==13) $("#btn_compute").click(); });
+        $("#input_art_corr_dist").keyup(function(e){ if(e.which==13) $("#btn_compute").click(); });
+        $("#input_spotter_alt").keyup(function(e){   if(e.which==13) $("#btn_compute").click(); });
+        $("#input_tar_alt").keyup(function(e){       if(e.which==13) $("#btn_compute").click(); });
+        $("#input_art_alt").keyup(function(e){       if(e.which==13) $("#btn_compute").click(); });
+
+        // TRP functionality
+        var trp_list = [];
+        var update_trp_buttonstate = function() {
+            for (var i=0; i<trp_list.length; i++) {
+                var m = (i==trp_list.length-1)? "from spotter to TRP #"+trp_list[i] : "from TRP #"+trp_list[i+1]+" to TRP #"+trp_list[i];
+                $("#input_trp_"+trp_list[i]+"_dist").attr("placeholder", m).attr("aria-label", m);
+                $("#input_trp_"+trp_list[i]+"_azim").attr("placeholder", m).attr("aria-label", m);
+            }
+            var m = "from spotter to artillery";
+            if (trp_list.length > 0) {
+                $("#btn_del_trp").show();
+                m = "from TRP #"+trp_list[0]+" to artillery";
+            } else {
+                $("#btn_del_trp").hide();
+            }
+            $("#input_art_dist").attr("placeholder", m).attr("aria-label", m);
+            $("#input_art_azim").attr("placeholder", m).attr("aria-label", m);
+        };
+        update_trp_buttonstate();
+
+        var dropLastTRP = function() {
+            var lastID = trp_list.pop();
+            $("#trp_"+lastID).remove();
+            update_trp_buttonstate();
+        };
+
+        $('#btn_add_trp').click(function() {
+            var newTRPid = trp_list.length + 1;
+            trp_list.push(newTRPid);
+            var trp_tab_base = 10 + (newTRPid - 1) * 3;
+            var html_template = `<section id="trp_{newTRPid}">
+                <h2 style="font-size:20pt">Target Reference Point (TRP) #{newTRPid}</h2>
+                <div class="input-group mb-0">
+                    <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Distance</span></div>
+                    <input id="input_trp_{newTRPid}_dist" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_dist}">
+                    <div class="input-group-append"><span class="input-group-text">meters</span></div>
+                </div>
+                <div class="input-group mb-0">
+                    <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Azimuth</span></div>
+                    <input id="input_trp_{newTRPid}_azim" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
+                    <div class="input-group-append">
+                        <span class="input-group-text">mills</span>
+                        <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1">&#x21c4;</button>
+                    </div>
+                </div>
+                <div class="input-group mb-3">
+                    <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Altitude</span></div>
+                    <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters" tabindex="{tabindex_alt}">
+                    <div class="input-group-append"><span class="input-group-text">meters</span></div>
+                </div>
+            </section>`;
+            html_template = html_template.replace(/{newTRPid}/g, newTRPid);
+            html_template = html_template.replace(/{tabindex_dist}/g, trp_tab_base);
+            html_template = html_template.replace(/{tabindex_azim}/g, trp_tab_base + 1);
+            html_template = html_template.replace(/{tabindex_alt}/g,  trp_tab_base + 2);
+            $("#container_additional_trps").prepend(html_template);
+            $("#btn_swapcourse_trp_"+newTRPid+"_azim").click(function() {
+                $("#input_trp_"+newTRPid+"_azim").val(artycal.get_backcourse(parseFloat($("#input_trp_"+newTRPid+"_azim").val())));
             });
-            $("#firingplans_add_input").keyup(function(e){
-                // the input field reacts on enter and will store the new plan
-                if(e.which == 13){  //onEnter
-                    var fpname = $(this).val();
-                    if (fpname != null && fpname != "") {
-                        freshFireplan  = newFireplanFromcurrent(fpname);
-                        active_plan_id = addFiringplan(freshFireplan);
-                        loadFiringplan(active_plan_id);
-                        persist_firingplans();
-                    } else {
-                        //console.log("adding firingplan skipped: name empty");
-                    }
-                    
-                    // clean input field and hide it again
-                    $("#firingplans_add_input").val("");
-                    $("#firingplans_add_input").hide();
-                    updateFireplanSubmenuState();
-                }
-            });
-            
-            $("#firingplans_menu_save").click(function(){
-                if (active_plan_id > -1) {
-                    var fp = newFireplanFromcurrent(firingplans[active_plan_id].name);
-                    firingplans[active_plan_id] = fp;
-                    updateFireplanSubmenuState();
+            $("#input_trp_"+newTRPid+"_dist").keyup(function(e){ if(e.which==13) $("#btn_compute").click(); });
+            $("#input_trp_"+newTRPid+"_azim").keyup(function(e){ if(e.which==13) $("#btn_compute").click(); });
+            $("#input_trp_"+newTRPid+"_alt").keyup(function(e){  if(e.which==13) $("#btn_compute").click(); });
+            $("#input_trp_"+newTRPid+"_dist").focus();
+            update_trp_buttonstate();
+        });
+
+        $("#btn_del_trp").click(function() { dropLastTRP(); });
+
+        // Firing plans
+        const firingplans_storagename = "allens-artillery-calc_firingplans";
+        var firingplans = JSON.parse(localStorage.getItem(firingplans_storagename));
+        if (firingplans == null) firingplans = [];
+        $("#firingplans_add_input").hide();
+        var active_plan_id = -1;
+
+        var persist_firingplans = function() {
+            localStorage.setItem(firingplans_storagename, JSON.stringify(firingplans.filter(d => d != null)));
+        };
+
+        var newFireplanFromcurrent = function(name) {
+            var fp = { name:name,
+                spotter:{ alt:parseFloat($("#input_spotter_alt").val()) },
+                tgt:{ dist:parseFloat($("#input_tar_dist").val()), azim:parseFloat($("#input_tar_azim").val()), alt:parseFloat($("#input_tar_alt").val()) },
+                art:{ dist:parseFloat($("#input_art_dist").val()), azim:parseFloat($("#input_art_azim").val()), alt:parseFloat($("#input_art_alt").val()),
+                    corr:{ dir:parseFloat($("#input_art_corr_dir").val()), dist:parseFloat($("#input_art_corr_dist").val()) } },
+                trps:[] };
+            for (var i=0; i<trp_list.length; i++) {
+                var idx = trp_list[i];
+                fp.trps.push({ id:idx, dist:parseFloat($("#input_trp_"+idx+"_dist").val()), azim:parseFloat($("#input_trp_"+idx+"_azim").val()), alt:parseFloat($("#input_trp_"+idx+"_alt").val()) });
+            }
+            return fp;
+        };
+
+        var loadFiringplan = function(id) {
+            var fp = firingplans[id];
+            $("#btn_clear").click();
+            if (fp.spotter) $("#input_spotter_alt").val(fp.spotter.alt);
+            $("#input_tar_dist").val(fp.tgt.dist);
+            $("#input_tar_azim").val(fp.tgt.azim);
+            if (fp.tgt.alt) $("#input_tar_alt").val(fp.tgt.alt);
+            for (var i=0; i<fp.trps.length; i++) {
+                $('#btn_add_trp').click();
+                $("#input_trp_"+(i+1)+"_dist").val(fp.trps[i].dist);
+                $("#input_trp_"+(i+1)+"_azim").val(fp.trps[i].azim);
+                if (fp.trps[i].alt) $("#input_trp_"+(i+1)+"_alt").val(fp.trps[i].alt);
+            }
+            $("#input_art_dist").val(fp.art.dist);
+            $("#input_art_azim").val(fp.art.azim);
+            if (fp.art.alt) $("#input_art_alt").val(fp.art.alt);
+            $("#firingplans_menu_btn").html(firingplans[id].name);
+            active_plan_id = id;
+            $("#raw_result_div").html(""); $("#est_result_div").html("");
+            updateFireplanSubmenuState();
+        };
+
+        var globalUnique_newPlanID = firingplans.length;
+        var addFiringplan = function(fp, newPlanID) {
+            if (newPlanID == null) {
+                newPlanID = globalUnique_newPlanID++;
+                firingplans[newPlanID] = fp;
+                active_plan_id = newPlanID;
+                persist_firingplans();
+                $("#firingplans_menu_btn").html(firingplans[newPlanID].name);
+            }
+            $("#firingplans_menu").append("<button class=\"dropdown-item\" type=\"button\" id=\"firingplans_plan_"+newPlanID+"\">"+firingplans[newPlanID].name+"</button>");
+            $("#firingplans_plan_"+newPlanID).click(function(){ loadFiringplan(newPlanID); });
+            return newPlanID;
+        };
+
+        var updateFireplanSubmenuState = function() {
+            $("#firingplans_menu_add, #firingplans_menu_del, #firingplans_menu_save").removeAttr("disabled");
+            $(":button[id*=firingplans_plan_]").removeAttr("disabled");
+            var clean = firingplans.filter(d => d != null);
+            if (active_plan_id < 0 || clean.length == 0) {
+                $("#firingplans_menu_del, #firingplans_menu_save").attr("disabled","");
+            }
+            if ($("#firingplans_add_input").is(":visible")) {
+                $("#firingplans_menu_add, #firingplans_menu_del, #firingplans_menu_save").attr("disabled","");
+                $(":button[id*=firingplans_plan_]").attr("disabled","");
+            }
+        };
+
+        for (var i=0; i<firingplans.length; i++) { addFiringplan(firingplans[i], i); }
+        updateFireplanSubmenuState();
+
+        $("#firingplans_menu_add").click(function() {
+            $("#firingplans_add_input").show().focus();
+            updateFireplanSubmenuState();
+        });
+        $("#firingplans_add_input").keyup(function(e) {
+            if (e.which == 13) {
+                var fpname = $(this).val();
+                if (fpname) {
+                    active_plan_id = addFiringplan(newFireplanFromcurrent(fpname));
+                    loadFiringplan(active_plan_id);
                     persist_firingplans();
                 }
-            });
-            
-            $("#firingplans_menu_del").click(function(){
-                if (active_plan_id > -1) {
-                    firingplans[active_plan_id] = null;
-                    $("#firingplans_plan_"+active_plan_id).remove();
-                    active_plan_id = -1;
-                    $("#firingplans_menu_btn").html("Firing plans");
-                }
+                $(this).val("").hide();
+                updateFireplanSubmenuState();
+            }
+        });
+        $("#firingplans_menu_save").click(function() {
+            if (active_plan_id > -1) {
+                firingplans[active_plan_id] = newFireplanFromcurrent(firingplans[active_plan_id].name);
                 updateFireplanSubmenuState();
                 persist_firingplans();
-            });
-            
-            
-             $("#firingplans_menu_btn").click(function(){
-                //console.log("Fireplan BTN clicked");
-                if ( active_plan_id > -1) {
-                    loadFiringplan(active_plan_id);
-                    updateFireplanSubmenuState();
-                }
-             });
+            }
+        });
+        $("#firingplans_menu_del").click(function() {
+            if (active_plan_id > -1) {
+                firingplans[active_plan_id] = null;
+                $("#firingplans_plan_"+active_plan_id).remove();
+                active_plan_id = -1;
+                $("#firingplans_menu_btn").html("Firing plans");
+            }
+            updateFireplanSubmenuState();
+            persist_firingplans();
+        });
+        $("#firingplans_menu_btn").click(function() {
+            if (active_plan_id > -1) { loadFiringplan(active_plan_id); updateFireplanSubmenuState(); }
         });
 
-        // Theme toggle
-        function getCookie(name) {
-            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-            return match ? match[2] : null;
+
+        // ========================
+        // BROKER UI
+        // ========================
+        var brokerBatteries = [];
+
+        // Spotter session-level position (one for the whole session; used for adjustments).
+        // Session-level spotter grid (optional, may change as the spotter moves).
+        // Provides a convenience default for spotter->target azimuth when the
+        // per-target azimuth field is left blank.
+        var spotterSelf = { gridExpanded: null };
+
+        // Spotter target queue.
+        // Each entry:
+        //   id, label, labelIsCustom,
+        //   gridInputRaw, gridExpanded, altitude, batteryId,
+        //   adjLR, adjSA,                          (current values in the input boxes)
+        //   adjPendingLR, adjPendingSA,            (values used for the in-flight adjustment send)
+        //   history: [ { seq, kind:'initial'|'adjustment', clientRef, computed:{distance,direction,targetAltitude},
+        //                adjustment:{lr,sa}|null, sentAt, deliveredAt, uuid } ],
+        //   currentUuid, firstUuid, fireMissionId,
+        //   adjustmentsDelivered, sendInFlight
+        var spotterTargets = [];
+        var nextTargetId = 1;
+        var nextClientRef = 1;
+
+        // Artillery incoming missions.
+        // Each entry:
+        //   fireMissionId, firstUuid, currentUuid,
+        //   from, batteryCallsignAtReceive,
+        //   history: [ { uuid, kind:'initial'|'adjustment', distance, direction, targetAltitude, time, adjustmentNumber? } ],
+        //   fired, firedAt, receivedAt
+        var artilleryMissions = [];
+
+        function showBrokerSection(id) {
+            $('#broker-entry, #broker-role-select, #broker-arty-view, #broker-spotter-view').hide();
+            $('#' + id).show();
         }
-        function setCookie(name, value, days) {
-            var d = new Date();
-            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-            document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
+
+        function setSessionNav(visible) {
+            $('#nav-session').toggle(visible);
         }
-        function getCurrentTheme() {
-            return document.documentElement.getAttribute('data-theme') || 'light';
+
+        function setConnStatus(connected) {
+            var el = $('#conn-status');
+            el.find('.conn-dot').html(connected ? '&#9679;' : '&#9675;');
+            el.find('.conn-text').text(connected ? ' Connected' : ' Disconnected');
+            if (connected) el.removeClass('disconnected').addClass('connected');
+            else           el.removeClass('connected').addClass('disconnected');
         }
-        function updateToggleIcon() {
-            var btn = document.getElementById('theme-toggle');
-            btn.innerHTML = getCurrentTheme() === 'dark' ? '&#9788;' : '&#9790;';
-        }
-        updateToggleIcon();
-        document.getElementById('theme-toggle').addEventListener('click', function() {
-            var newTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
-            if (newTheme === 'light') {
-                document.documentElement.removeAttribute('data-theme');
-            } else {
-                document.documentElement.setAttribute('data-theme', newTheme);
+
+        // ----- Broker callbacks -----
+        broker.onConnectionChange = function(connected) {
+            setConnStatus(connected);
+        };
+
+        broker.onBatteriesUpdate = function(batteries) {
+            brokerBatteries = batteries;
+            // Drop battery references on targets whose battery went offline.
+            // (If a target has already been delivered we keep the id so the
+            // history stays correlated; the row will show "battery offline".)
+            spotterTargets.forEach(function(t) {
+                if (t.batteryId && !brokerBatteries.find(function(b) { return b.id === t.batteryId; })) {
+                    if (!t.firstUuid) t.batteryId = null;
+                }
+            });
+            renderBatterySummary();
+            renderSpotterTargets();
+        };
+
+        broker.onFireMission = function(msg) {
+            var uuid = msg.uuid || null;
+            var fmId = uuid ? uuid.substring(0, 5) : ('#' + (artilleryMissions.length + 1));
+            var m = {
+                fireMissionId: fmId,
+                firstUuid: uuid,
+                currentUuid: uuid,
+                from: msg.from || null,
+                history: [{
+                    uuid: uuid,
+                    kind: 'initial',
+                    distance: Number(msg.distance),
+                    direction: Number(msg.direction),
+                    targetAltitude: (msg.targetAltitude == null || isNaN(Number(msg.targetAltitude)))
+                        ? null
+                        : Number(msg.targetAltitude),
+                    time: new Date().toLocaleTimeString(),
+                    adjustmentNumber: null,
+                }],
+                fired: false,
+                firedAt: null,
+                receivedAt: new Date().toLocaleTimeString(),
+            };
+            artilleryMissions.unshift(m);
+            renderMissionsList();
+        };
+
+        broker.onFireMissionAdjust = function(msg) {
+            // Find the mission whose currentUuid matches previousUuid and
+            // append a new history entry, updating currentUuid.
+            var prev = msg.previousUuid;
+            var m = artilleryMissions.find(function(x) { return x.currentUuid === prev; });
+            if (!m) {
+                // No mission matched (we may have missed the original). Render
+                // it as a stand-alone initial entry so the artillery isn't
+                // blind to incoming traffic.
+                broker.onFireMission(msg);
+                return;
             }
-            setCookie('theme', newTheme, 365);
-            updateToggleIcon();
+            m.currentUuid = msg.uuid;
+            m.history.push({
+                uuid: msg.uuid,
+                kind: 'adjustment',
+                distance: Number(msg.distance),
+                direction: Number(msg.direction),
+                targetAltitude: (msg.targetAltitude == null || isNaN(Number(msg.targetAltitude)))
+                    ? null
+                    : Number(msg.targetAltitude),
+                time: new Date().toLocaleTimeString(),
+                adjustmentNumber: msg.adjustmentNumber == null ? null : Number(msg.adjustmentNumber),
+            });
+            // A new adjustment "unfires" the mission since there's something new to shoot.
+            m.fired = false;
+            m.firedAt = null;
+            renderMissionsList();
+        };
+
+        broker.onFireMissionAck = function(msg) {
+            // Locate the target whose latest history entry has this clientRef.
+            var t = null, entry = null;
+            for (var i = 0; i < spotterTargets.length; i++) {
+                var tt = spotterTargets[i];
+                for (var j = tt.history.length - 1; j >= 0; j--) {
+                    if (tt.history[j].clientRef === msg.clientRef) {
+                        t = tt; entry = tt.history[j];
+                        break;
+                    }
+                }
+                if (entry) break;
+            }
+            if (!t || !entry) return;
+
+            entry.uuid = msg.uuid;
+            entry.deliveredAt = new Date().toLocaleTimeString();
+            t.currentUuid = msg.uuid;
+            if (!t.firstUuid) {
+                t.firstUuid = msg.uuid;
+                t.fireMissionId = msg.uuid ? msg.uuid.substring(0, 5) : null;
+            }
+            if (entry.kind === 'adjustment') {
+                t.adjustmentsDelivered = (t.adjustmentsDelivered || 0) + 1;
+                // Clear the adjustment input boxes — they're consumed.
+                t.adjLR = null;
+                t.adjSA = null;
+            }
+            t.sendInFlight = false;
+            renderSpotterTargets();
+        };
+
+        broker.onError = function(message) {
+            alert('Session error: ' + message);
+        };
+
+        // ----- OP Code entry -----
+        $('#btn-broker-enter').click(function() {
+            var raw = $('#broker-opcode-input').val().trim();
+            if (!raw) return;
+            if (!/^[A-Za-z0-9_-]{1,32}$/.test(raw)) {
+                $('#broker-entry-error').text('OP Code may only contain letters, numbers, hyphens, and underscores (no spaces).').show();
+                return;
+            }
+            $('#broker-entry-error').hide();
+            $('#display-opcode').text(raw);
+            showBrokerSection('broker-role-select');
         });
+        $('#broker-opcode-input').keyup(function(e) { if (e.which === 13) $('#btn-broker-enter').click(); });
+
+        // ----- Role selection -----
+        $('#btn-role-artillery').click(function() {
+            var code = $('#display-opcode').text();
+            broker.join(code, 'artillery');
+            setSessionNav(true);
+            showBrokerSection('broker-arty-view');
+            $('#arty-setup-section').show();
+            $('#arty-online-section').hide();
+            artilleryMissions = [];
+            renderMissionsList();
+        });
+
+        $('#btn-role-spotter').click(function() {
+            var code = $('#display-opcode').text();
+            broker.join(code, 'spotter');
+            setSessionNav(true);
+            showBrokerSection('broker-spotter-view');
+            spotterTargets = [];
+            nextTargetId = 1;
+            spotterSelf = { gridExpanded: null };
+            $('#spotter-self-grid').val('');
+            renderSpotterTargets();
+        });
+
+        // ----- Leave session -----
+        $('#btn-leave-session').click(function() {
+            broker.leave();
+            brokerBatteries = [];
+            spotterTargets = [];
+            artilleryMissions = [];
+            spotterSelf = { gridExpanded: null };
+            setSessionNav(false);
+            setConnStatus(false);
+            showBrokerSection('broker-entry');
+            $('#broker-opcode-input').val('');
+            $('#arty-callsign-input').val('').prop('disabled', false);
+            artyCallsignLocked = null;
+            $('#arty-grid-input').val('');
+            $('#arty-alt-input').val('');
+            $('#spotter-self-grid').val('');
+            $('#broker-battery-summary').addClass('is-hidden');
+            $('#btn-toggle-batteries').find('.btn-text').text('Show');
+            $('#btn-toggle-batteries').find('.btn-icon').html('&#9662;');
+            $('#arty-setup-section').show();
+            $('#arty-online-section').hide();
+            $('#fire-missions-list').empty();
+            $('#arty-no-missions').show();
+            renderBatterySummary();
+            renderSpotterTargets();
+            renderMissionsList();
+        });
+
+        // ----- Manual reconnect (preserves all entered data) -----
+        $('#btn-reconnect-session').click(function() {
+            broker.reconnect();
+        });
+
+        // ----- Battery list collapse toggle (defaults to collapsed) -----
+        $('#btn-toggle-batteries').click(function() {
+            var summary = $('#broker-battery-summary');
+            var hidden = summary.toggleClass('is-hidden').hasClass('is-hidden');
+            $(this).find('.btn-text').text(hidden ? 'Show' : 'Hide');
+            $(this).find('.btn-icon').html(hidden ? '&#9662;' : '&#9652;'); // ▾ vs ▴
+        });
+
+        // ===== Grid expansion helpers =====
+        // 6-digit grid (EEE NNN) -> xxx50yyy50
+        // 8-digit grid (EEEE NNNN) -> xxxx5yyyy5
+        // 10-digit grid is already at 1m precision; returned as-is.
+        // Returns null for invalid input.
+        function expandGrid(raw) {
+            if (raw == null) return null;
+            var s = String(raw).replace(/\s+/g, '');
+            if (/^\d{10}$/.test(s)) return s;
+            if (/^\d{8}$/.test(s))  return s.substring(0, 4) + '5' + s.substring(4) + '5';
+            if (/^\d{6}$/.test(s))  return s.substring(0, 3) + '50' + s.substring(3) + '50';
+            return null;
+        }
+        function describeGrid(raw, expanded) {
+            if (!raw) return '';
+            if (raw.length === expanded.length) return raw;
+            return raw + ' → ' + expanded;
+        }
+
+        // Compute a virtual 10-digit target grid from the session spotter
+        // grid plus an azimuth (mils) and distance (m) from spotter to target.
+        // Wraps within the 0..99999 grid range like a 100km MGRS square.
+        function polarToGrid(spotterGridExpanded, azim, dist) {
+            if (!spotterGridExpanded) return null;
+            if (azim == null || dist == null || isNaN(azim) || isNaN(dist)) return null;
+            var sx = parseInt(spotterGridExpanded.substring(0, 5));
+            var sy = parseInt(spotterGridExpanded.substring(5, 10));
+            var polar_rad = (azim - 1600) * -1 * Math.PI / 3200;
+            var dx = dist * Math.cos(polar_rad);
+            var dy = dist * Math.sin(polar_rad);
+            var tx = sx + dx;
+            var ty = sy + dy;
+            function pad5(n) {
+                var i = Math.round(n);
+                i = ((i % 100000) + 100000) % 100000;
+                var s = String(i);
+                while (s.length < 5) s = '0' + s;
+                return s;
+            }
+            return pad5(tx) + pad5(ty);
+        }
+
+        // Recompute t.gridExpanded based on the target's current input mode.
+        // For polar mode this depends on the session spotter grid + the
+        // per-target azim/dist values.
+        function refreshTargetGrid(t) {
+            if (t.firstUuid) return; // grid locked after delivery
+            if (t.inputMode === 'polar') {
+                t.gridExpanded = polarToGrid(spotterSelf.gridExpanded, t.targetAzim, t.targetDist);
+            } else {
+                t.gridExpanded = expandGrid(t.gridInputRaw);
+            }
+        }
+
+        // ----- Artillery go online -----
+        // Callsign is captured ONCE on the first go-online of a session.
+        // Subsequent stand-down -> online re-uses the same callsign.
+        var artyCallsignLocked = null;
+        $('#btn-arty-online').click(function() {
+            var rawGrid   = $('#arty-grid-input').val().trim();
+            var grid      = expandGrid(rawGrid);
+            var alt       = parseFloat($('#arty-alt-input').val());
+            var callsign  = $('#arty-callsign-input').val().trim();
+            if (!grid) {
+                $('#arty-setup-error').text('Grid must be 6, 8, or 10 digits (numbers only).').show();
+                return;
+            }
+            if (isNaN(alt)) {
+                $('#arty-setup-error').text('Altitude is required.').show();
+                return;
+            }
+            if (callsign.length > 18) {
+                $('#arty-setup-error').text('Callsign must be 18 characters or fewer.').show();
+                return;
+            }
+            if (callsign.length > 0 && !/^[A-Za-z0-9_-]+$/.test(callsign)) {
+                $('#arty-setup-error').text('Callsign may only contain letters, numbers, hyphens, and underscores.').show();
+                return;
+            }
+            $('#arty-setup-error').hide();
+
+            // Lock the callsign for the session on first online.
+            if (artyCallsignLocked === null) {
+                artyCallsignLocked = callsign || '';
+                $('#arty-callsign-input').val(artyCallsignLocked).prop('disabled', true);
+            }
+            var finalCallsign = artyCallsignLocked || null;
+            broker.batteryOnline(grid, alt, finalCallsign);
+
+            $('#arty-grid-display').text(describeGrid(rawGrid, grid));
+            $('#arty-alt-display').text(alt);
+            $('#arty-callsign-display').text(finalCallsign ? ('"' + finalCallsign + '"') : '');
+            $('#arty-setup-section').hide();
+            $('#arty-online-section').show();
+        });
+        $('#arty-callsign-input').keyup(function(e) { if (e.which === 13) $('#arty-grid-input').focus(); });
+        $('#arty-grid-input').keyup(function(e) { if (e.which === 13) $('#arty-alt-input').focus(); });
+        $('#arty-alt-input').keyup(function(e)  { if (e.which === 13) $('#btn-arty-online').click(); });
+
+        // ----- Stand Down (battery stops accepting fire missions, stays in session) -----
+        $('#btn-arty-standdown').click(function() {
+            broker.batteryOffline();
+            $('#arty-setup-section').show();
+            $('#arty-online-section').hide();
+        });
+
+        // ===== Helpers =====
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, function(c) {
+                return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+            });
+        }
+        function batteryLabel(b) {
+            if (!b) return '';
+            if (b.callsign && String(b.callsign).length > 0) {
+                return '"' + escapeHtml(b.callsign) + '" (grid ' + escapeHtml(b.grid) + ', alt ' + escapeHtml(String(b.altitude)) + 'm)';
+            }
+            return 'Grid ' + escapeHtml(b.grid) + ' (alt ' + escapeHtml(String(b.altitude)) + 'm)';
+        }
+        function batteryShort(b) {
+            if (!b) return '';
+            if (b.callsign && String(b.callsign).length > 0) return '"' + b.callsign + '"';
+            return 'Grid ' + b.grid;
+        }
+
+        // Session-level spotter grid input.
+        $('#spotter-self-grid').on('input', function() {
+            var raw = $(this).val().trim();
+            var prev = spotterSelf.gridExpanded;
+            spotterSelf.gridExpanded = expandGrid(raw);
+
+            // When a spotter grid first becomes available, any pre-delivery
+            // target that's still in 'grid' mode AND hasn't had any grid
+            // typed in yet should default into polar mode (per spec). Already-
+            // typed grids are preserved (we never overwrite an entered grid).
+            var becameAvailable = !prev && spotterSelf.gridExpanded;
+            spotterTargets.forEach(function(t) {
+                if (t.firstUuid) return;
+                if (becameAvailable && t.inputMode === 'grid' && !t.gridInputRaw) {
+                    t.inputMode = 'polar';
+                }
+                // Polar-mode targets re-resolve their gridExpanded from the
+                // (possibly changed) spotter grid.
+                if (t.inputMode === 'polar') refreshTargetGrid(t);
+            });
+            // Full re-render: the mode toggle may need to appear/disappear,
+            // and inputs may need to switch.
+            renderSpotterTargets();
+        });
+
+        // ===== Spotter: battery summary (info-only) =====
+        function renderBatterySummary() {
+            var container = $('#broker-battery-summary');
+            $('#batteries-count').text(
+                brokerBatteries.length === 0 ? '' : '(' + brokerBatteries.length + ')'
+            );
+            if (brokerBatteries.length === 0) {
+                container.html('<p class="text-muted-themed">No batteries online in this session.</p>');
+                return;
+            }
+            container.empty();
+            brokerBatteries.forEach(function(b) {
+                container.append('<div class="battery-summary">' + batteryLabel(b) + '</div>');
+            });
+        }
+
+        // ===== Spotter: target queue =====
+        // PRESERVED math from the original tools-based broker. Distance is a
+        // 2D grid distance; the slant->horizontal correction using dh is kept
+        // as-is intentionally (do not change without coordinating with the
+        // tools page calculation).
+        function computeFireMission(battery, targetGrid, targetAltitude) {
+            if (!battery || !/^\d{10}$/.test(targetGrid)) return null;
+            var bx = parseInt(battery.grid.substring(0, 5));
+            var by = parseInt(battery.grid.substring(5, 10));
+            var tx = parseInt(targetGrid.substring(0, 5));
+            var ty = parseInt(targetGrid.substring(5, 10));
+            var batteryAlt = battery.altitude || 0;
+            var targAlt = (targetAltitude == null || isNaN(targetAltitude)) ? 0 : targetAltitude;
+            var polar = artycal.cartesianToPolar(bx, by, tx, ty);
+            if (polar.error) return null;
+            var dh = targAlt - batteryAlt;
+            var horizDist = polar.dist;
+            if (horizDist * horizDist - dh * dh > 0) {
+                horizDist = Math.sqrt(horizDist * horizDist - dh * dh);
+            }
+            var roundedDist = Math.round(horizDist);
+            var roundedAzim = Math.round(polar.azim);
+            if (roundedAzim === 6400) roundedAzim = 0;
+            return {
+                distance: horizDist,
+                direction: polar.azim,
+                targetAltitude: targAlt,
+                roundedDist: roundedDist,
+                roundedAzim: roundedAzim,
+                rawDist: Math.round(horizDist * 100) / 100,
+                rawAzim: Math.round(polar.azim * 100) / 100,
+            };
+        }
+
+        // Adjustment math: SHIFT the target by the correction (in spotter's
+        // frame), then run the same battery->target calculation as the
+        // unadjusted fire mission. Math intentionally identical to the initial
+        // path; only the target coordinate is shifted.
+        function resolveSpotterAzimToTarget(t) {
+            // Per-target manual override (the spotter's compass reading).
+            if (t.spotterAzimOverride != null && !isNaN(t.spotterAzimOverride)) {
+                return t.spotterAzimOverride;
+            }
+            // Fallback: compute from session spotter grid -> target grid.
+            if (spotterSelf.gridExpanded && t.gridExpanded) {
+                var sx = parseInt(spotterSelf.gridExpanded.substring(0, 5));
+                var sy = parseInt(spotterSelf.gridExpanded.substring(5, 10));
+                var tx = parseInt(t.gridExpanded.substring(0, 5));
+                var ty = parseInt(t.gridExpanded.substring(5, 10));
+                var polar = artycal.cartesianToPolar(sx, sy, tx, ty);
+                if (polar && !polar.error) return polar.azim;
+            }
+            return null;
+        }
+
+        function computeAdjustedSolution(battery, t) {
+            if (!battery || !t.gridExpanded) return null;
+            var spotterAzim = resolveSpotterAzimToTarget(t);
+            if (spotterAzim == null) return null;
+            var tx = parseInt(t.gridExpanded.substring(0, 5));
+            var ty = parseInt(t.gridExpanded.substring(5, 10));
+            var corrX = (t.adjLR == null || isNaN(t.adjLR)) ? 0 : t.adjLR;
+            var corrY = (t.adjSA == null || isNaN(t.adjSA)) ? 0 : t.adjSA;
+            if (corrX === 0 && corrY === 0) return null;
+            var corr = artycal.cartesianToPolar(0, 0, corrX, corrY);
+            if (corr.error) return null;
+            // Rotate correction into spotter->target frame (tools-section logic).
+            corr.azim = spotterAzim + corr.azim;
+            if (corr.azim > 6400) corr.azim -= 6400;
+            if (corr.azim < 0) corr.azim += 6400;
+            // Polar -> cartesian using artycal's convention (azim 0 = +y).
+            var polar_rad = (corr.azim - 1600) * -1 * Math.PI / 3200;
+            var dx = corr.dist * Math.cos(polar_rad);
+            var dy = corr.dist * Math.sin(polar_rad);
+            var newTx = tx + dx;
+            var newTy = ty + dy;
+            // Run the SAME battery->target formula as the initial mission,
+            // but on the shifted target. Inline because computeFireMission
+            // requires a 10-digit grid string; we have raw coords here.
+            var bx = parseInt(battery.grid.substring(0, 5));
+            var by = parseInt(battery.grid.substring(5, 10));
+            var batteryAlt = battery.altitude || 0;
+            var targAlt = (t.altitude == null || isNaN(t.altitude)) ? 0 : t.altitude;
+            var polar = artycal.cartesianToPolar(bx, by, newTx, newTy);
+            if (polar.error) return null;
+            var dh = targAlt - batteryAlt;
+            var horizDist = polar.dist;
+            if (horizDist * horizDist - dh * dh > 0) {
+                horizDist = Math.sqrt(horizDist * horizDist - dh * dh);
+            }
+            return {
+                distance: horizDist,
+                direction: polar.azim,
+                targetAltitude: targAlt,
+                roundedDist: Math.round(horizDist),
+                roundedAzim: ((Math.round(polar.azim) === 6400) ? 0 : Math.round(polar.azim)),
+                rawDist: Math.round(horizDist * 100) / 100,
+                rawAzim: Math.round(polar.azim * 100) / 100,
+            };
+        }
+
+        function formatSolution(s) {
+            if (!s) return '<span class="text-muted-themed">No solution yet.</span>';
+            var altDisp = (s.targetAltitude == null) ? 0 : Math.round(s.targetAltitude);
+            return '<strong>Dis: ' + s.roundedDist + 'm / Az: ' + s.roundedAzim + 'mil / Alt: ' + altDisp + 'm</strong>' +
+                '<div style="font-size:11px; color:var(--input-group-text)">Raw: ' + s.rawDist + 'm / ' + s.rawAzim + 'mil / ' + altDisp + 'm</div>';
+        }
+
+        function buildBatteryOptions(target) {
+            var opts = '<option value="">-- choose a battery --</option>';
+            brokerBatteries.forEach(function(b) {
+                var sel = (b.id === target.batteryId) ? ' selected' : '';
+                var label = (b.callsign && b.callsign.length > 0)
+                    ? ('"' + b.callsign + '" — grid ' + b.grid)
+                    : ('Grid ' + b.grid);
+                opts += '<option value="' + escapeHtml(b.id) + '"' + sel + '>' + escapeHtml(label) + ' (alt ' + escapeHtml(String(b.altitude)) + 'm)</option>';
+            });
+            return opts;
+        }
+
+        function defaultLabel(t) { return 'Target #' + t.id; }
+
+        // ===== Spotter: render target list =====
+        function renderSpotterTargets() {
+            var container = $('#spotter-targets-container');
+            var delivered = spotterTargets.filter(function(t) { return t.firstUuid; }).length;
+            var queued = spotterTargets.length - delivered;
+            $('#spotter-stats').text(spotterTargets.length === 0 ? '' : (queued + ' queued · ' + delivered + ' delivered'));
+
+            if (spotterTargets.length === 0) {
+                container.html('<p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>');
+                return;
+            }
+            container.empty();
+            spotterTargets.forEach(function(t) {
+                container.append(buildTargetRowHtml(t));
+                updateTargetRow(t.id);
+            });
+        }
+
+        function buildTargetRowHtml(t) {
+            var locked = !!t.firstUuid;
+            var label = t.label || defaultLabel(t);
+
+            // ----- Header tags (FM ID, info bullets post-delivery, status) -----
+            var headerTags = '';
+            if (t.fireMissionId) {
+                headerTags += ' <span class="fm-id-badge" title="Fire Mission ID — first 5 chars of original UUID">ID: ' + escapeHtml(t.fireMissionId) + '</span>';
+            }
+            if (locked) {
+                if (t.gridExpanded) {
+                    headerTags += ' <span class="info-pill" title="Target grid">Grid: ' + escapeHtml(t.gridExpanded) + '</span>';
+                }
+                var altDisp = (t.altitude == null || isNaN(t.altitude)) ? 0 : (Math.round(t.altitude * 100) / 100);
+                headerTags += ' <span class="info-pill" title="Target altitude">Alt: ' + escapeHtml(String(altDisp)) + 'm</span>';
+                var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+                if (battery) {
+                    var btyName = (battery.callsign && battery.callsign.length > 0)
+                        ? ('"' + battery.callsign + '"')
+                        : ('Grid ' + battery.grid);
+                    headerTags += ' <span class="info-pill" title="Battery">Bty: ' + escapeHtml(btyName) + '</span>';
+                }
+            }
+
+            // ----- Target input region (only pre-delivery) -----
+            // Three modes:
+            //   - grid mode: Grid + Altitude    (col-md-8 + col-md-4)
+            //   - polar mode: Az + Dist + Altitude (col-md-4 + col-md-4 + col-md-4)
+            // The "Grid" prepend acts as a clickable toggle when a spotter grid
+            // is available, swapping the input(s) shown.
+            var inputsSection = '';
+            if (!locked) {
+                var canPolar = !!spotterSelf.gridExpanded;
+                var inPolar  = (t.inputMode === 'polar') && canPolar;
+                var togglePolarTitle = 'Switch to Az/Dist mode';
+                var toggleGridTitle  = 'Switch to Grid mode';
+
+                if (inPolar) {
+                    inputsSection = (
+                        '<div class="row target-inputs">' +
+                            '<div class="col-md-4">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend">' +
+                                        '<button class="btn btn-outline-secondary input-mode-toggle" type="button" title="' + toggleGridTitle + '">Az &#x21cc;</button>' +
+                                    '</div>' +
+                                    '<input type="number" class="form-control target-azim" placeholder="from spotter (mils)" value="' + (t.targetAzim == null ? '' : escapeHtml(String(t.targetAzim))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">mil</span></div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="col-md-4">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Dist</span></div>' +
+                                    '<input type="number" class="form-control target-dist" placeholder="from spotter (m)" value="' + (t.targetDist == null ? '' : escapeHtml(String(t.targetDist))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="col-md-4">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Alt</span></div>' +
+                                    '<input type="number" class="form-control target-alt" placeholder="Target altitude" value="' + (t.altitude == null ? '' : escapeHtml(String(t.altitude))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>'
+                    );
+                } else {
+                    // Grid mode. Toggle button shown only when canPolar.
+                    var prepend = canPolar
+                        ? '<button class="btn btn-outline-secondary input-mode-toggle" type="button" title="' + togglePolarTitle + '">Grid &#x21cc;</button>'
+                        : '<span class="input-group-text" style="width:5em">Grid</span>';
+                    inputsSection = (
+                        '<div class="row target-inputs">' +
+                            '<div class="col-md-8">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend">' + prepend + '</div>' +
+                                    '<input type="text" class="form-control target-grid" maxlength="10" placeholder="6, 8, or 10-digit grid" value="' + escapeHtml(t.gridInputRaw || '') + '">' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="col-md-4">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Alt</span></div>' +
+                                    '<input type="number" class="form-control target-alt" placeholder="Target altitude" value="' + (t.altitude == null ? '' : escapeHtml(String(t.altitude))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>'
+                    );
+                }
+            }
+
+            // ----- Battery selector (only pre-delivery; post-delivery it's an info pill) -----
+            var batterySection = locked
+                ? ''
+                : ('<div class="input-group input-group-sm mb-1">' +
+                        '<div class="input-group-prepend"><span class="input-group-text" style="width:5em">Battery</span></div>' +
+                        '<select class="form-control target-battery">' + buildBatteryOptions(t) + '</select>' +
+                    '</div>');
+
+            // ----- Adjustment section (only post-delivery, collapsed by default) -----
+            var adjSection = '';
+            if (locked) {
+                var adjUsed = t.adjustmentsDelivered || 0;
+                var adjAllowed = adjUsed < 3;
+                var summaryText = adjAllowed
+                    ? ('Make Adjustment — ' + (adjUsed + 1) + ' of 3 available')
+                    : ('Adjustments exhausted (' + adjUsed + ' of 3 used)');
+                adjSection = (
+                    '<details class="adjustment-section' + (adjAllowed ? '' : ' disabled') + '">' +
+                        '<summary>' + escapeHtml(summaryText) + '</summary>' +
+                        '<div class="adjustment-section-body" style="padding-top:6px">' +
+                            '<div class="row">' +
+                                '<div class="col-md-6">' +
+                                    '<div class="input-group input-group-sm mb-1">' +
+                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Az→Target</span></div>' +
+                                        '<input type="number" class="form-control target-spotter-azim" placeholder="Override (mils)" value="' + (t.spotterAzimOverride == null ? '' : escapeHtml(String(t.spotterAzimOverride))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
+                                        '<div class="input-group-append"><span class="input-group-text">mil</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="row">' +
+                                '<div class="col-md-6">' +
+                                    '<div class="input-group input-group-sm mb-1">' +
+                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Left/Right</span></div>' +
+                                        '<input type="number" class="form-control target-adj-lr" placeholder="neg = left" value="' + (t.adjLR == null ? '' : escapeHtml(String(t.adjLR))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
+                                        '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div class="col-md-6">' +
+                                    '<div class="input-group input-group-sm mb-1">' +
+                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Short/Add</span></div>' +
+                                        '<input type="number" class="form-control target-adj-sa" placeholder="neg = short" value="' + (t.adjSA == null ? '' : escapeHtml(String(t.adjSA))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
+                                        '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<button class="btn btn-sm btn-outline-info btn-target-adjust"' + (adjAllowed ? '' : ' disabled') + '>' +
+                                '<span class="btn-icon">&#10003;</span><span class="btn-text">Send Adjustment</span>' +
+                            '</button>' +
+                        '</div>' +
+                    '</details>'
+                );
+            }
+
+            return (
+                '<div class="target-row" data-id="' + t.id + '">' +
+                    '<div class="row-head">' +
+                        '<div class="row-head-main">' +
+                            '<span class="target-label-wrap">' +
+                                '<span class="target-label-display" title="Click to rename (spotter-only, not sent to artillery)">' + escapeHtml(label) + '</span>' +
+                            '</span>' +
+                            headerTags +
+                            '<span class="target-status pill"></span>' +
+                        '</div>' +
+                        '<div class="row-head-actions">' +
+                            (locked ? '' : '<button class="btn btn-sm btn-outline-primary btn-target-send" title="Send fire mission"><span class="btn-icon">&#10148;</span><span class="btn-text">Send</span></button>') +
+                            '<button class="btn btn-sm btn-outline-danger btn-target-remove" title="Remove target" aria-label="Remove"><span class="btn-icon">&#10005;</span><span class="btn-text">Remove</span></button>' +
+                        '</div>' +
+                    '</div>' +
+
+                    inputsSection +
+                    batterySection +
+                    adjSection +
+
+                    '<div class="target-solution" style="margin-top:8px"></div>' +
+
+                    '<details class="solution-history">' +
+                        '<summary>History (<span class="history-count">0</span>)</summary>' +
+                        '<div class="history-body"></div>' +
+                    '</details>' +
+                '</div>'
+            );
+        }
+
+        function updateTargetRow(id) {
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var rowEl = $('.target-row[data-id="' + id + '"]');
+            if (rowEl.length === 0) return;
+
+            // Row tint
+            rowEl.removeClass('is-sent is-queued is-pending');
+            if (t.firstUuid) rowEl.addClass('is-sent');
+            else if (t.batteryId && t.gridExpanded) rowEl.addClass('is-queued');
+            else rowEl.addClass('is-pending');
+
+            var statusEl = rowEl.find('.target-status');
+            var sendBtn  = rowEl.find('.btn-target-send');
+            var solEl    = rowEl.find('.target-solution');
+            var histBody = rowEl.find('.history-body');
+            var histCt   = rowEl.find('.history-count');
+            var adjBtn   = rowEl.find('.btn-target-adjust');
+
+            // Status pill
+            statusEl.removeClass('pill-queued pill-sent pill-delivered pill-pending');
+            if (t.sendInFlight) {
+                statusEl.addClass('pill-sent').text('Sending…');
+                sendBtn.prop('disabled', true);
+            } else if (t.firstUuid) {
+                statusEl.addClass('pill-delivered').text('Delivered');
+            } else if (t.batteryId && t.gridExpanded) {
+                statusEl.addClass('pill-queued').text('Queued');
+            } else {
+                statusEl.text('');
+            }
+
+            // Compute current and staged solutions.
+            var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+            var initialSol = computeFireMission(battery, t.gridExpanded, t.altitude);
+            var adjustedSol = t.firstUuid ? computeAdjustedSolution(battery, t) : null;
+
+            // Latest delivered solution (from the history).
+            var latest = null;
+            for (var i = t.history.length - 1; i >= 0; i--) {
+                if (t.history[i].deliveredAt && t.history[i].computed) {
+                    latest = t.history[i].computed;
+                    break;
+                }
+            }
+
+            // Render solution panel.
+            var html = '';
+            if (t.firstUuid) {
+                // Delivered path: show latest delivered + optional proposed adjustment.
+                if (latest) {
+                    html += '<div class="solution-line"><span class="pill pill-delivered">DELIVERED</span>' + formatSolution(latest) + '</div>';
+                }
+                if (adjustedSol) {
+                    html += '<div class="solution-line"><span class="pill pill-pending">PROPOSED ADJUSTMENT</span>' + formatSolution(adjustedSol) + '</div>';
+                } else if ((t.adjLR != null || t.adjSA != null) && (t.adjLR !== 0 || t.adjSA !== 0)) {
+                    // User has entered a correction but we can't compute it.
+                    html += '<div style="font-size:12px; color:#dc3545; margin-top:4px">Cannot compute adjustment: set the Spotter Grid above, or enter <em>Az→Target</em> for this row.</div>';
+                }
+            } else {
+                // Pre-delivery: show preview of initial fire mission if we have everything.
+                if (initialSol) {
+                    html += '<div class="solution-line"><span class="pill pill-queued">PREVIEW</span>' + formatSolution(initialSol) + '</div>';
+                } else {
+                    html = '<span class="text-muted-themed">Enter a 6/8/10-digit grid and select a battery to compute.</span>';
+                }
+            }
+            solEl.html(html);
+
+            // Send button: visible only pre-delivery.
+            if (t.firstUuid) {
+                sendBtn.hide();
+            } else {
+                sendBtn.show().text('Send').prop('disabled', t.sendInFlight || !t.batteryId || !t.gridExpanded);
+            }
+
+            // Adjust button enabled criteria.
+            var adjLeft = 3 - (t.adjustmentsDelivered || 0);
+            var canAdjust = !!t.firstUuid && adjLeft > 0 && !t.sendInFlight && !!adjustedSol;
+            adjBtn.prop('disabled', !canAdjust);
+
+            // History rendering
+            histCt.text(t.history.length);
+            histBody.empty();
+            t.history.forEach(function(h, idx) {
+                var isCurrent = (idx === t.history.length - 1);
+                var cls = h.kind === 'adjustment' ? 'adjustment' : 'initial';
+                var lbl = h.kind === 'adjustment' ? ('Adjustment ' + idx) : 'Initial';
+                var status = h.deliveredAt
+                    ? '<span class="pill pill-delivered">DELIVERED</span> at ' + escapeHtml(h.deliveredAt)
+                    : '<span class="pill pill-sent">SENT</span> waiting on ack…';
+                var adjStr = (h.adjustment && (h.adjustment.lr || h.adjustment.sa))
+                    ? '<div>Adj: L/R ' + (h.adjustment.lr || 0) + 'm · S/A ' + (h.adjustment.sa || 0) + 'm</div>'
+                    : '';
+                histBody.append(
+                    '<div class="history-entry ' + cls + (isCurrent ? ' current' : '') + '">' +
+                        '<div><strong>' + lbl + '</strong> &mdash; sent ' + escapeHtml(h.sentAt) + ' · ' + status + '</div>' +
+                        adjStr +
+                        (h.computed ? '<div>' + formatSolution(h.computed) + '</div>' : '') +
+                        (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + escapeHtml(h.uuid) + '</div>' : '') +
+                    '</div>'
+                );
+            });
+        }
+
+        function newClientRef() {
+            return 'cr_' + (Date.now()).toString(36) + '_' + (nextClientRef++);
+        }
+
+        function sendInitialFireMission(id) {
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid || t.sendInFlight) return false;
+            var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+            var fm = computeFireMission(battery, t.gridExpanded, t.altitude);
+            if (!fm) return false;
+            var ref = newClientRef();
+            t.history.push({
+                seq: t.history.length + 1,
+                kind: 'initial',
+                clientRef: ref,
+                adjustment: null,
+                computed: fm,
+                sentAt: new Date().toLocaleTimeString(),
+                deliveredAt: null,
+                uuid: null,
+            });
+            t.sendInFlight = true;
+            var ok = broker.sendFireMission(t.batteryId, fm.distance, fm.direction, fm.targetAltitude, ref);
+            if (!ok) {
+                t.history.pop();
+                t.sendInFlight = false;
+                renderSpotterTargets();
+                alert('Cannot send fire mission: not connected.');
+                return false;
+            }
+            renderSpotterTargets();
+            return true;
+        }
+
+        function sendAdjustment(id) {
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || !t.firstUuid || t.sendInFlight) return false;
+            if ((t.adjustmentsDelivered || 0) >= 3) return false;
+            var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+            var fm = computeAdjustedSolution(battery, t);
+            if (!fm) {
+                alert('Cannot compute adjustment. Set the Spotter Grid (or this row’s Az→Target), and enter a non-zero Left/Right or Short/Add.');
+                return false;
+            }
+            var ref = newClientRef();
+            var adjNum = (t.adjustmentsDelivered || 0) + 1;
+            t.history.push({
+                seq: t.history.length + 1,
+                kind: 'adjustment',
+                clientRef: ref,
+                adjustment: { lr: t.adjLR || 0, sa: t.adjSA || 0 },
+                computed: fm,
+                sentAt: new Date().toLocaleTimeString(),
+                deliveredAt: null,
+                uuid: null,
+            });
+            t.sendInFlight = true;
+            var ok = broker.sendFireMissionAdjust(t.batteryId, fm.distance, fm.direction, fm.targetAltitude, t.currentUuid, ref, adjNum);
+            if (!ok) {
+                t.history.pop();
+                t.sendInFlight = false;
+                renderSpotterTargets();
+                alert('Cannot send adjustment: not connected.');
+                return false;
+            }
+            renderSpotterTargets();
+            return true;
+        }
+
+        // ===== Target list buttons =====
+        $('#btn-add-target').click(function() {
+            // Default to polar input mode when a session spotter grid is set;
+            // grid mode otherwise. Either mode can be toggled per-row.
+            var defaultMode = spotterSelf.gridExpanded ? 'polar' : 'grid';
+            var t = {
+                id: nextTargetId++,
+                label: null, labelIsCustom: false,
+                inputMode: defaultMode,
+                gridInputRaw: '', gridExpanded: null, altitude: null,
+                targetAzim: null, targetDist: null,
+                batteryId: null,
+                adjLR: null, adjSA: null,
+                spotterAzimOverride: null,
+                history: [],
+                currentUuid: null, firstUuid: null, fireMissionId: null,
+                adjustmentsDelivered: 0,
+                sendInFlight: false,
+            };
+            spotterTargets.push(t);
+            renderSpotterTargets();
+            var row = $('.target-row[data-id="' + t.id + '"]');
+            // Focus the first interactive input for whatever mode we ended up in.
+            (row.find('.target-azim').length ? row.find('.target-azim')
+                                              : row.find('.target-grid')).focus();
+        });
+
+        $('#btn-send-all-targets').click(function() {
+            var sentCount = 0;
+            spotterTargets.forEach(function(t) {
+                if (t.firstUuid || t.sendInFlight) return;
+                if (!t.batteryId || !t.gridExpanded) return;
+                if (sendInitialFireMission(t.id)) sentCount++;
+            });
+            if (sentCount === 0) {
+                alert('No queued targets are ready to send (each needs a valid grid and a battery, and must not yet be delivered).');
+            }
+        });
+
+        $('#btn-clear-sent-targets').click(function() {
+            spotterTargets = spotterTargets.filter(function(t) { return !t.firstUuid; });
+            renderSpotterTargets();
+        });
+
+        // ===== Delegated row handlers =====
+        $(document).on('input', '.target-row .target-grid', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return; // grid locked after delivery
+            t.gridInputRaw = $(this).val().trim();
+            t.gridExpanded = expandGrid(t.gridInputRaw);
+            updateTargetRow(id);
+        });
+        $(document).on('input', '.target-row .target-alt', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return; // altitude locked after delivery
+            var v = parseFloat($(this).val());
+            t.altitude = isNaN(v) ? null : v;
+            updateTargetRow(id);
+        });
+        $(document).on('change', '.target-row .target-battery', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return;
+            t.batteryId = $(this).val() || null;
+            updateTargetRow(id);
+        });
+        $(document).on('input', '.target-row .target-adj-lr', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var v = parseFloat($(this).val());
+            t.adjLR = isNaN(v) ? null : v;
+            updateTargetRow(id);
+        });
+        $(document).on('input', '.target-row .target-adj-sa', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var v = parseFloat($(this).val());
+            t.adjSA = isNaN(v) ? null : v;
+            updateTargetRow(id);
+        });
+        $(document).on('input', '.target-row .target-spotter-azim', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var v = parseFloat($(this).val());
+            t.spotterAzimOverride = isNaN(v) ? null : v;
+            updateTargetRow(id);
+        });
+        // Azimuth + Distance inputs (polar mode only).
+        $(document).on('input', '.target-row .target-azim', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return;
+            var v = parseFloat($(this).val());
+            t.targetAzim = isNaN(v) ? null : v;
+            refreshTargetGrid(t);
+            updateTargetRow(id);
+        });
+        $(document).on('input', '.target-row .target-dist', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return;
+            var v = parseFloat($(this).val());
+            t.targetDist = isNaN(v) ? null : v;
+            refreshTargetGrid(t);
+            updateTargetRow(id);
+        });
+
+        // Toggle between Grid input and Az/Dist inputs.
+        $(document).on('click', '.target-row .input-mode-toggle', function() {
+            var rowEl = $(this).closest('.target-row');
+            var id = parseInt(rowEl.data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.firstUuid) return;
+            if (!spotterSelf.gridExpanded) {
+                alert('Set a Spotter Grid above to use Az/Dist mode.');
+                return;
+            }
+            t.inputMode = (t.inputMode === 'polar') ? 'grid' : 'polar';
+            refreshTargetGrid(t);
+            renderSpotterTargets();
+            var newRow = $('.target-row[data-id="' + t.id + '"]');
+            if (t.inputMode === 'polar') newRow.find('.target-azim').focus();
+            else newRow.find('.target-grid').focus();
+        });
+
+        $(document).on('click', '.target-row .btn-target-send', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            sendInitialFireMission(id);
+        });
+        $(document).on('click', '.target-row .btn-target-adjust', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            sendAdjustment(id);
+        });
+        $(document).on('click', '.target-row .btn-target-remove', function() {
+            var id = parseInt($(this).closest('.target-row').data('id'));
+            spotterTargets = spotterTargets.filter(function(t) { return t.id !== id; });
+            renderSpotterTargets();
+        });
+
+        // Click target label to rename. Spotter-only, not sent to artillery.
+        $(document).on('click', '.target-row .target-label-display', function() {
+            var rowEl = $(this).closest('.target-row');
+            var id = parseInt(rowEl.data('id'));
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var current = t.label || defaultLabel(t);
+            var wrap = $(this).closest('.target-label-wrap');
+            wrap.html('<input type="text" class="form-control form-control-sm target-label-edit" maxlength="48" value="' + escapeHtml(current) + '">');
+            var input = wrap.find('input');
+            input.focus().select();
+            function commit() {
+                var newVal = input.val().trim();
+                if (newVal && newVal !== defaultLabel(t)) {
+                    t.label = newVal;
+                    t.labelIsCustom = true;
+                } else {
+                    t.label = null;
+                    t.labelIsCustom = false;
+                }
+                renderSpotterTargets();
+            }
+            input.on('blur', commit);
+            input.on('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.off('blur', commit); commit(); }
+                else if (e.key === 'Escape') { input.off('blur', commit); renderSpotterTargets(); }
+            });
+        });
+
+        // ===== Artillery: incoming missions =====
+        function renderMissionsList() {
+            var container = $('#fire-missions-list');
+            var pending = artilleryMissions.filter(function(m) { return !m.fired; });
+            var fired   = artilleryMissions.filter(function(m) { return  m.fired; });
+
+            $('#missions-stats').text(
+                artilleryMissions.length === 0
+                    ? ''
+                    : (pending.length + ' pending · ' + fired.length + ' fired')
+            );
+
+            if (artilleryMissions.length === 0) {
+                container.empty();
+                $('#arty-no-missions').show();
+                return;
+            }
+            $('#arty-no-missions').hide();
+            container.empty();
+
+            artilleryMissions.forEach(function(m) {
+                var current = m.history[m.history.length - 1];
+                var roundedDist = Math.round(current.distance);
+                var roundedDir  = Math.round(current.direction); if (roundedDir === 6400) roundedDir = 0;
+                var altStr = (current.targetAltitude == null) ? '&mdash;' : (Math.round(current.targetAltitude) + 'm');
+                var rawAlt = (current.targetAltitude == null) ? '' : ((Math.round(current.targetAltitude * 100) / 100) + 'm');
+                var actionBtn = m.fired
+                    ? '<button class="btn btn-sm btn-outline-secondary btn-mission-unfire" data-fmid="' + escapeHtml(m.fireMissionId) + '" title="Mark not yet fired" aria-label="Undo"><span class="btn-icon">&#x27F2;</span><span class="btn-text">Undo</span></button>'
+                    : '<button class="btn btn-sm btn-outline-primary btn-mission-fire"   data-fmid="' + escapeHtml(m.fireMissionId) + '" title="Mark as fired" aria-label="Mark as Fired"><span class="btn-icon">&#10003;</span><span class="btn-text">Mark as Fired</span></button>';
+                var firedNote = m.fired
+                    ? '<span style="font-size:11px; color:var(--input-group-text)">fired at ' + escapeHtml(m.firedAt) + '</span>'
+                    : '';
+                var adjCount = m.history.filter(function(h) { return h.kind === 'adjustment'; }).length;
+                var adjBadge = adjCount > 0
+                    ? '<span class="pill pill-pending">' + adjCount + ' adj</span>'
+                    : '';
+                var historyEntries = '';
+                m.history.forEach(function(h, idx) {
+                    var isCurrent = (idx === m.history.length - 1);
+                    var entryCls = h.kind === 'adjustment' ? 'adjustment' : 'initial';
+                    var lbl = h.kind === 'adjustment'
+                        ? ('Adjustment ' + (h.adjustmentNumber || idx))
+                        : 'Initial';
+                    var ed = Math.round(h.distance);
+                    var ea = Math.round(h.direction); if (ea === 6400) ea = 0;
+                    var ealt = (h.targetAltitude == null) ? '&mdash;' : (Math.round(h.targetAltitude));
+                    historyEntries +=
+                        '<div class="history-entry ' + entryCls + (isCurrent ? ' current' : '') + '">' +
+                            '<div><strong>' + lbl + '</strong> &mdash; received ' + escapeHtml(h.time) + (isCurrent ? ' (latest)' : '') + '</div>' +
+                            '<div>Dis: ' + ed + 'm / Az: ' + ea + 'mil / Alt: ' + ealt + 'm</div>' +
+                            '<div style="font-size:11px; color:var(--input-group-text)">Raw: ' + (Math.round(h.distance * 100) / 100) + 'm / ' + (Math.round(h.direction * 100) / 100) + 'mil' +
+                                (h.targetAltitude == null ? '' : (' / ' + (Math.round(h.targetAltitude * 100) / 100) + 'm')) + '</div>' +
+                            (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + escapeHtml(h.uuid) + '</div>' : '') +
+                        '</div>';
+                });
+
+                var html =
+                    '<div class="fm-item ' + (m.fired ? 'fm-fired' : 'fm-pending') + '">' +
+                        '<div class="fm-head">' +
+                            '<div class="fm-head-main">' +
+                                '<span class="' + (m.fired ? 'badge-fired' : 'badge-pending') + '">' +
+                                    '<span class="btn-icon">' + (m.fired ? '&#10003;' : '&#9888;') + '</span>' +
+                                    '<span class="btn-text"> ' + (m.fired ? 'FIRED' : 'PENDING') + '</span>' +
+                                '</span>' +
+                                '<span class="fm-id-badge">ID: ' + escapeHtml(m.fireMissionId) + '</span>' +
+                                '<span style="font-size:11px; color:var(--input-group-text)">received ' + escapeHtml(m.receivedAt) + '</span>' +
+                                adjBadge +
+                                firedNote +
+                            '</div>' +
+                            '<div class="fm-head-actions">' + actionBtn + '</div>' +
+                        '</div>' +
+                        '<div><strong>Dis: ' + roundedDist + 'm / Az: ' + roundedDir + 'mil / Alt: ' + altStr + '</strong></div>' +
+                        '<div style="font-size:11px; color:var(--input-group-text)">Raw: ' + (Math.round(current.distance * 100) / 100) + 'm / ' + (Math.round(current.direction * 100) / 100) + 'mil / ' + rawAlt + '</div>' +
+                        '<details class="solution-history">' +
+                            '<summary>History (' + m.history.length + ')</summary>' +
+                            '<div class="history-body">' + historyEntries + '</div>' +
+                        '</details>' +
+                    '</div>';
+                container.append(html);
+            });
+        }
+
+        function findMissionByFmId(fmId) {
+            return artilleryMissions.find(function(m) { return m.fireMissionId === fmId; });
+        }
+
+        $(document).on('click', '.btn-mission-fire', function() {
+            var m = findMissionByFmId($(this).data('fmid'));
+            if (!m) return;
+            m.fired = true;
+            m.firedAt = new Date().toLocaleTimeString();
+            renderMissionsList();
+        });
+        $(document).on('click', '.btn-mission-unfire', function() {
+            var m = findMissionByFmId($(this).data('fmid'));
+            if (!m) return;
+            m.fired = false;
+            m.firedAt = null;
+            renderMissionsList();
+        });
+        $('#btn-clear-fired').click(function() {
+            artilleryMissions = artilleryMissions.filter(function(m) { return !m.fired; });
+            renderMissionsList();
+        });
+
+    }); // end $(document).ready
+
+    // ========================
+    // THEME TOGGLE
+    // ========================
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : null;
+    }
+    function setCookie(name, value, days) {
+        var d = new Date();
+        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
+    }
+    function getCurrentTheme() {
+        return document.documentElement.getAttribute('data-theme') || 'light';
+    }
+    function updateToggleIcon() {
+        document.getElementById('theme-toggle').innerHTML = getCurrentTheme() === 'dark' ? '&#9788;' : '&#9790;';
+    }
+    updateToggleIcon();
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+        var newTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+        if (newTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        } else {
+            document.documentElement.setAttribute('data-theme', newTheme);
+        }
+        setCookie('theme', newTheme, 365);
+        updateToggleIcon();
+    });
     </script>
 </body>
 </html>

@@ -1,0 +1,11 @@
+name = "artillery-broker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "ARTILLERY_ROOM"
+class_name = "ArtilleryRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ArtilleryRoom"]

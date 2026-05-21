@@ -13,19 +13,22 @@
  *     { type: "battery_offline" }
  *     { type: "fire_mission", batteryId, distance, direction, targetAltitude, clientRef }
  *     { type: "fire_mission_adjust", batteryId, distance, direction, targetAltitude,
- *                                    previousUuid, clientRef, adjustmentNumber }
+ *                                    fireMissionUuid, clientRef, adjustmentNumber }
+ *     { type: "fire_mission_receipt", fireMissionUuid, spotterSessionId }
  *     { type: "ping" }                       // auto-responded with "pong"
  *
  *   Server -> Client:
  *     { type: "batteries", batteries: [ { id, grid, altitude, callsign } ] }
- *     // Sent to artillery — UUID identifies this fire solution.
- *     { type: "fire_mission", uuid, from, distance, direction, targetAltitude }
- *     // Sent to artillery — uuid is the NEW id, previousUuid is the prior id for this mission.
- *     { type: "fire_mission_adjust", uuid, previousUuid, from, distance, direction,
+ *     // Sent to artillery — fireMissionUuid is stable for the life of this mission.
+ *     { type: "fire_mission", fireMissionUuid, from, distance, direction, targetAltitude }
+ *     // Sent to artillery — same stable fireMissionUuid, no UUID rotation.
+ *     { type: "fire_mission_adjust", fireMissionUuid, from, distance, direction,
  *                                    targetAltitude, adjustmentNumber }
- *     // Sent to spotter ONLY after the message has been delivered to artillery.
+ *     // Sent to spotter after the message has been queued for delivery to artillery.
  *     // clientRef is the spotter's local correlation id from the original send.
- *     { type: "fire_mission_ack", uuid, clientRef, previousUuid? }
+ *     { type: "fire_mission_ack", fireMissionUuid, clientRef }
+ *     // Sent to spotter when artillery explicitly receipts the fire mission.
+ *     { type: "fire_mission_delivered", fireMissionUuid }
  *     { type: "pong" }                       // auto-response
  *     { type: "error", message: "...", clientRef? }
  *
@@ -199,26 +202,27 @@ export class ArtilleryRoom {
           this.send(ws, { type: "error", message: "Battery is not online", clientRef: msg.clientRef || null });
           return;
         }
-        const uuid = crypto.randomUUID();
+        // One UUID assigned at mission creation; stable for the entire lifetime.
+        const fireMissionUuid = crypto.randomUUID();
         const distance = Number(msg.distance);
         const direction = Number(msg.direction);
         const targetAltitude = msg.targetAltitude == null || isNaN(Number(msg.targetAltitude))
           ? null
           : Number(msg.targetAltitude);
 
-        // 1) Deliver to artillery first.
+        // 1) Deliver to artillery.
         this.send(target.ws, {
           type: "fire_mission",
-          uuid,
+          fireMissionUuid,
           from: session.id,
           distance,
           direction,
           targetAltitude,
         });
-        // 2) Then ack the spotter so they know it was delivered.
+        // 2) Ack the spotter (sent confirmation; delivery confirmed via fire_mission_receipt).
         this.send(ws, {
           type: "fire_mission_ack",
-          uuid,
+          fireMissionUuid,
           clientRef: msg.clientRef == null ? null : String(msg.clientRef),
         });
         return;
@@ -233,10 +237,10 @@ export class ArtilleryRoom {
           this.send(ws, { type: "error", message: "Battery id is required" });
           return;
         }
-        if (!isUuid(msg.previousUuid)) {
+        if (!isUuid(msg.fireMissionUuid)) {
           this.send(ws, {
             type: "error",
-            message: "previousUuid must be a valid UUID",
+            message: "fireMissionUuid must be a valid UUID",
             clientRef: msg.clientRef || null,
           });
           return;
@@ -246,7 +250,8 @@ export class ArtilleryRoom {
           this.send(ws, { type: "error", message: "Battery is not online", clientRef: msg.clientRef || null });
           return;
         }
-        const uuid = crypto.randomUUID();
+        // Re-use the stable fireMissionUuid — no new UUID is generated.
+        const fireMissionUuid = msg.fireMissionUuid;
         const distance = Number(msg.distance);
         const direction = Number(msg.direction);
         const targetAltitude = msg.targetAltitude == null || isNaN(Number(msg.targetAltitude))
@@ -258,8 +263,7 @@ export class ArtilleryRoom {
 
         this.send(target.ws, {
           type: "fire_mission_adjust",
-          uuid,
-          previousUuid: msg.previousUuid,
+          fireMissionUuid,
           from: session.id,
           distance,
           direction,
@@ -268,10 +272,26 @@ export class ArtilleryRoom {
         });
         this.send(ws, {
           type: "fire_mission_ack",
-          uuid,
+          fireMissionUuid,
           clientRef: msg.clientRef == null ? null : String(msg.clientRef),
-          previousUuid: msg.previousUuid,
         });
+        return;
+      }
+
+      case "fire_mission_receipt": {
+        if (session.role !== "artillery") return;
+        if (!isUuid(msg.fireMissionUuid)) return;
+        const spotterId = msg.spotterSessionId;
+        if (!spotterId || typeof spotterId !== "string") return;
+        // Find the originating spotter WebSocket and send a delivery notification.
+        for (const w of this.state.getWebSockets()) {
+          let a;
+          try { a = w.deserializeAttachment(); } catch (e) { continue; }
+          if (a && a.id === spotterId && a.role === "spotter") {
+            this.send(w, { type: "fire_mission_delivered", fireMissionUuid: msg.fireMissionUuid });
+            break;
+          }
+        }
         return;
       }
 
@@ -283,10 +303,10 @@ export class ArtilleryRoom {
   handleDisconnect(ws) {
     let session;
     try { session = ws.deserializeAttachment(); } catch (e) { session = null; }
-    // The WS is already gone from getWebSockets() by the time this fires,
-    // so any battery list we build now will reflect the disconnect.
+    // Pass the disconnecting ws explicitly so it is excluded from the battery
+    // list even if getWebSockets() hasn't removed it yet (e.g. error events).
     if (session && session.role === "artillery" && session.grid) {
-      this.broadcastBatteryList();
+      this.broadcastBatteryList(ws);
     }
   }
 
@@ -303,12 +323,15 @@ export class ArtilleryRoom {
     return null;
   }
 
-  getBatteryList() {
+  getBatteryList(excludeWs = null) {
+    const seen = new Set();
     const batteries = [];
     for (const ws of this.state.getWebSockets()) {
+      if (excludeWs && ws === excludeWs) continue;
       let a;
       try { a = ws.deserializeAttachment(); } catch (e) { continue; }
-      if (a && a.role === "artillery" && a.grid) {
+      if (a && a.role === "artillery" && a.grid && !seen.has(a.id)) {
+        seen.add(a.id);
         batteries.push({
           id: a.id,
           grid: a.grid,
@@ -324,8 +347,8 @@ export class ArtilleryRoom {
     this.send(ws, { type: "batteries", batteries: this.getBatteryList() });
   }
 
-  broadcastBatteryList() {
-    const payload = { type: "batteries", batteries: this.getBatteryList() };
+  broadcastBatteryList(excludeWs = null) {
+    const payload = { type: "batteries", batteries: this.getBatteryList(excludeWs) };
     for (const ws of this.state.getWebSockets()) {
       let a;
       try { a = ws.deserializeAttachment(); } catch (e) { continue; }

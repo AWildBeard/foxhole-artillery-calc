@@ -19,10 +19,15 @@ var broker = (function() {
     var WORKER_URL = "wss://arty.byte.farm";
 
     // --- Connection state ---
+    // connectionState: 'connected' | 'reconnecting' | 'disconnected'
+    var STATE_CONNECTED    = 'connected';
+    var STATE_RECONNECTING = 'reconnecting';
+    var STATE_DISCONNECTED = 'disconnected';
+
     var ws = null;
     var opCode = null;
     var role = null;
-    var connected = false;
+    var connectionState = STATE_DISCONNECTED;
     var batteries = [];
 
     // Battery state that must persist across reconnects.
@@ -43,26 +48,28 @@ var broker = (function() {
     var MAX_RECONNECT_DELAY_MS = 30000;
 
     // --- Callbacks ---
-    inst.onConnectionChange  = null; // function(connected:boolean)
+    inst.onConnectionChange  = null; // function(state:'connected'|'reconnecting'|'disconnected')
     inst.onBatteriesUpdate   = null; // function(batteries)
     // Initial fire mission delivered TO this artillery client.
-    inst.onFireMission       = null; // function({uuid, from, distance, direction, targetAltitude})
-    // Adjustment delivered TO this artillery client (updates a prior mission by previousUuid).
-    inst.onFireMissionAdjust = null; // function({uuid, previousUuid, from, distance, direction, targetAltitude, adjustmentNumber})
-    // Server confirmed delivery of a send/adjust we made (spotter side).
-    inst.onFireMissionAck    = null; // function({uuid, clientRef, previousUuid?})
-    inst.onError             = null; // function(message)
+    inst.onFireMission          = null; // function({fireMissionUuid, from, distance, direction, targetAltitude})
+    // Adjustment delivered TO this artillery client (same stable fireMissionUuid as the initial).
+    inst.onFireMissionAdjust    = null; // function({fireMissionUuid, from, distance, direction, targetAltitude, adjustmentNumber})
+    // Server confirmed our send was queued for delivery (spotter side).
+    inst.onFireMissionAck       = null; // function({fireMissionUuid, clientRef})
+    // Artillery client explicitly receipted the message (spotter side delivery confirmation).
+    inst.onFireMissionDelivered = null; // function({fireMissionUuid})
+    inst.onError                = null; // function(message, clientRef?)
 
-    inst.isConnected  = function() { return connected; };
+    inst.isConnected  = function() { return connectionState === STATE_CONNECTED; };
     inst.getRole      = function() { return role; };
     inst.getOpCode    = function() { return opCode; };
     inst.getBatteries = function() { return batteries; };
 
-    function setConnected(state) {
-        if (connected === state) return;
-        connected = state;
+    function setConnectionState(newState) {
+        if (connectionState === newState) return;
+        connectionState = newState;
         if (inst.onConnectionChange) {
-            try { inst.onConnectionChange(state); } catch (e) {}
+            try { inst.onConnectionChange(newState); } catch (e) {}
         }
     }
 
@@ -94,12 +101,15 @@ var broker = (function() {
 
     function killSocket() {
         if (!ws) return;
+        // Pong timeout or forced kill — we are actively reconnecting.
+        setConnectionState(STATE_RECONNECTING);
+        clearAllTimers();
         try { ws.close(); } catch (e) {}
         if (ws.readyState === WebSocket.CLOSED) {
-            // Already closed: onclose won't fire again, so do the work here.
-            setConnected(false);
+            // Already closed: onclose won't fire again, so schedule ourselves.
             scheduleReconnect();
         }
+        // else: onclose will fire and call scheduleReconnect().
     }
 
     function buildWsUrl(code) {
@@ -115,13 +125,14 @@ var broker = (function() {
             ws = new WebSocket(url);
         } catch (e) {
             if (inst.onError) inst.onError("Failed to open WebSocket");
+            setConnectionState(STATE_DISCONNECTED);
             scheduleReconnect();
             return;
         }
 
         ws.onopen = function() {
             reconnectAttempt = 0;
-            setConnected(true);
+            setConnectionState(STATE_CONNECTED);
             try {
                 ws.send(JSON.stringify({ type: "join", role: role }));
                 if (role === "artillery" && batteryOnline && batteryGrid != null) {
@@ -173,26 +184,36 @@ var broker = (function() {
                         try { inst.onFireMissionAck(msg); } catch (e) {}
                     }
                     return;
+                case "fire_mission_delivered":
+                    if (inst.onFireMissionDelivered) {
+                        try { inst.onFireMissionDelivered(msg); } catch (e) {}
+                    }
+                    return;
                 case "error":
                     if (inst.onError) {
-                        try { inst.onError(msg.message); } catch (e) {}
+                        try { inst.onError(msg.message, msg.clientRef || null); } catch (e) {}
                     }
                     return;
             }
         };
 
         ws.onclose = function() {
-            setConnected(false);
             clearAllTimers();
             if (intentionallyClosing) {
                 intentionallyClosing = false;
+                setConnectionState(STATE_DISCONNECTED);
                 return;
             }
+            // Any unexpected close means we are actively reconnecting (yellow).
+            // This also transitions back from the brief red set by onerror.
+            setConnectionState(STATE_RECONNECTING);
             scheduleReconnect();
         };
 
         ws.onerror = function() {
-            setConnected(false);
+            // A connection attempt failed — show red until onclose fires and
+            // schedules the next attempt (which transitions back to yellow).
+            setConnectionState(STATE_DISCONNECTED);
         };
     }
 
@@ -219,6 +240,7 @@ var broker = (function() {
         batteryCallsign = null;
         reconnectAttempt = 0;
         intentionallyClosing = false;
+        setConnectionState(STATE_RECONNECTING);
         connect();
     };
 
@@ -234,7 +256,7 @@ var broker = (function() {
         batteryAlt = null;
         batteryCallsign = null;
         reconnectAttempt = 0;
-        setConnected(false);
+        setConnectionState(STATE_DISCONNECTED);
     };
 
     /**
@@ -249,6 +271,7 @@ var broker = (function() {
         if (ws) { try { ws.close(); } catch (e) {} ws = null; }
         intentionallyClosing = false;
         reconnectAttempt = 0;
+        setConnectionState(STATE_RECONNECTING);
         connect();
     };
 
@@ -316,12 +339,12 @@ var broker = (function() {
     };
 
     /**
-     * Send an adjustment for an existing, already-delivered fire mission.
-     * previousUuid must be the most recently delivered UUID for the mission.
+     * Send an adjustment for an existing fire mission.
+     * fireMissionUuid is the stable UUID assigned at mission creation — it never changes.
      */
-    inst.sendFireMissionAdjust = function(batteryId, distance, direction, targetAltitude, previousUuid, clientRef, adjustmentNumber) {
+    inst.sendFireMissionAdjust = function(batteryId, distance, direction, targetAltitude, fireMissionUuid, clientRef, adjustmentNumber) {
         if (!ws || ws.readyState !== WebSocket.OPEN || role !== "spotter") return false;
-        if (!previousUuid) return false;
+        if (!fireMissionUuid) return false;
         try {
             ws.send(JSON.stringify({
                 type: "fire_mission_adjust",
@@ -331,7 +354,7 @@ var broker = (function() {
                 targetAltitude: (targetAltitude == null || isNaN(Number(targetAltitude)))
                     ? null
                     : Number(targetAltitude),
-                previousUuid: String(previousUuid),
+                fireMissionUuid: String(fireMissionUuid),
                 clientRef: clientRef == null ? null : String(clientRef),
                 adjustmentNumber: adjustmentNumber == null ? null : Number(adjustmentNumber),
             }));
@@ -339,6 +362,22 @@ var broker = (function() {
         } catch (e) {
             return false;
         }
+    };
+
+    /**
+     * Send an application-level delivery receipt for a fire mission (artillery side).
+     * The worker forwards this to the originating spotter as fire_mission_delivered.
+     */
+    inst.sendFireMissionReceipt = function(fireMissionUuid, spotterSessionId) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || role !== "artillery") return;
+        if (!fireMissionUuid) return;
+        try {
+            ws.send(JSON.stringify({
+                type: "fire_mission_receipt",
+                fireMissionUuid: String(fireMissionUuid),
+                spotterSessionId: spotterSessionId ? String(spotterSessionId) : null,
+            }));
+        } catch (e) {}
     };
 
     // When the tab regains focus, validate the socket. Browsers (especially

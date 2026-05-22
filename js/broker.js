@@ -51,14 +51,23 @@ var broker = (function() {
     inst.onConnectionChange  = null; // function(state:'connected'|'reconnecting'|'disconnected')
     inst.onBatteriesUpdate   = null; // function(batteries)
     // Initial fire mission delivered TO this artillery client.
-    inst.onFireMission          = null; // function({fireMissionUuid, from, distance, direction, targetAltitude})
+    inst.onFireMission              = null; // function({fireMissionUuid, from, distance, direction, targetAltitude})
+    // Resend of an existing fire mission delivered TO this artillery client —
+    // same stable fireMissionUuid as the original; client updates the existing
+    // record in place rather than creating a new one.
+    inst.onFireMissionResend        = null; // function({fireMissionUuid, from, distance, direction, targetAltitude})
     // Adjustment delivered TO this artillery client (same stable fireMissionUuid as the initial).
-    inst.onFireMissionAdjust    = null; // function({fireMissionUuid, from, distance, direction, targetAltitude, adjustmentNumber})
+    inst.onFireMissionAdjust        = null; // function({fireMissionUuid, from, distance, direction, targetAltitude, adjustmentNumber})
+    // Batch of fresh missions delivered TO this artillery client.
+    inst.onFireMissionBatch         = null; // function({from, missions: [{fireMissionUuid, distance, direction, targetAltitude}, ...]})
     // Server confirmed our send was queued for delivery (spotter side).
-    inst.onFireMissionAck       = null; // function({fireMissionUuid, clientRef})
+    inst.onFireMissionAck           = null; // function({fireMissionUuid, clientRef})
+    // Server confirmed our batched send was queued for delivery (spotter side).
+    inst.onFireMissionBatchAck      = null; // function({clientRef, fireMissionUuids: [...]})
     // Artillery client explicitly receipted the message (spotter side delivery confirmation).
-    inst.onFireMissionDelivered = null; // function({fireMissionUuid})
-    inst.onError                = null; // function(message, clientRef?)
+    inst.onFireMissionDelivered     = null; // function({fireMissionUuid})
+    inst.onFireMissionBatchDelivered = null; // function({fireMissionUuids: [...]})
+    inst.onError                    = null; // function(message, clientRef?)
 
     inst.isConnected  = function() { return connectionState === STATE_CONNECTED; };
     inst.getRole      = function() { return role; };
@@ -174,6 +183,11 @@ var broker = (function() {
                         try { inst.onFireMission(msg); } catch (e) {}
                     }
                     return;
+                case "fire_mission_resend":
+                    if (inst.onFireMissionResend) {
+                        try { inst.onFireMissionResend(msg); } catch (e) {}
+                    }
+                    return;
                 case "fire_mission_adjust":
                     if (inst.onFireMissionAdjust) {
                         try { inst.onFireMissionAdjust(msg); } catch (e) {}
@@ -187,6 +201,21 @@ var broker = (function() {
                 case "fire_mission_delivered":
                     if (inst.onFireMissionDelivered) {
                         try { inst.onFireMissionDelivered(msg); } catch (e) {}
+                    }
+                    return;
+                case "fire_mission_batch":
+                    if (inst.onFireMissionBatch) {
+                        try { inst.onFireMissionBatch(msg); } catch (e) {}
+                    }
+                    return;
+                case "fire_mission_batch_ack":
+                    if (inst.onFireMissionBatchAck) {
+                        try { inst.onFireMissionBatchAck(msg); } catch (e) {}
+                    }
+                    return;
+                case "fire_mission_batch_delivered":
+                    if (inst.onFireMissionBatchDelivered) {
+                        try { inst.onFireMissionBatchDelivered(msg); } catch (e) {}
                     }
                     return;
                 case "error":
@@ -339,6 +368,33 @@ var broker = (function() {
     };
 
     /**
+     * Resend an existing fire mission, reusing its UUID. The worker forwards
+     * with the same UUID so the artillery client can update its existing
+     * record in place (clearing any Outdated state) rather than minting a
+     * duplicate card. Returns true if queued for transmission.
+     */
+    inst.sendFireMissionResend = function(batteryId, fireMissionUuid, distance, direction, targetAltitude, clientRef) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || role !== "spotter") return false;
+        if (!fireMissionUuid) return false;
+        try {
+            ws.send(JSON.stringify({
+                type: "fire_mission_resend",
+                batteryId: batteryId,
+                fireMissionUuid: String(fireMissionUuid),
+                distance: Number(distance),
+                direction: Number(direction),
+                targetAltitude: (targetAltitude == null || isNaN(Number(targetAltitude)))
+                    ? null
+                    : Number(targetAltitude),
+                clientRef: clientRef == null ? null : String(clientRef),
+            }));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    /**
      * Send an adjustment for an existing fire mission.
      * fireMissionUuid is the stable UUID assigned at mission creation — it never changes.
      */
@@ -375,6 +431,52 @@ var broker = (function() {
             ws.send(JSON.stringify({
                 type: "fire_mission_receipt",
                 fireMissionUuid: String(fireMissionUuid),
+                spotterSessionId: spotterSessionId ? String(spotterSessionId) : null,
+            }));
+        } catch (e) {}
+    };
+
+    /**
+     * Send a batch of fresh fire missions to one battery in a single message.
+     * `missions` is [{distance, direction, targetAltitude}, ...].
+     * The server's ack carries fireMissionUuids in the same order.
+     */
+    inst.sendFireMissionBatch = function(batteryId, missions, clientRef) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || role !== "spotter") return false;
+        if (!batteryId) return false;
+        if (!Array.isArray(missions) || missions.length === 0) return false;
+        try {
+            ws.send(JSON.stringify({
+                type: "fire_mission_batch",
+                batteryId: batteryId,
+                clientRef: clientRef == null ? null : String(clientRef),
+                missions: missions.map(function(m) {
+                    return {
+                        distance: Number(m.distance),
+                        direction: Number(m.direction),
+                        targetAltitude: (m.targetAltitude == null || isNaN(Number(m.targetAltitude)))
+                            ? null
+                            : Number(m.targetAltitude),
+                    };
+                }),
+            }));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    /**
+     * Artillery-side batch receipt: a single message confirming receipt of every
+     * fireMissionUuid in the batch. The worker forwards as fire_mission_batch_delivered.
+     */
+    inst.sendFireMissionBatchReceipt = function(fireMissionUuids, spotterSessionId) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || role !== "artillery") return;
+        if (!Array.isArray(fireMissionUuids) || fireMissionUuids.length === 0) return;
+        try {
+            ws.send(JSON.stringify({
+                type: "fire_mission_batch_receipt",
+                fireMissionUuids: fireMissionUuids.map(String),
                 spotterSessionId: spotterSessionId ? String(spotterSessionId) : null,
             }));
         } catch (e) {}

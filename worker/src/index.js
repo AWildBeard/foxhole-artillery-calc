@@ -12,23 +12,40 @@
  *     { type: "battery_online", grid: "1234567890", altitude: 123, callsign?: "Bravo-6" }
  *     { type: "battery_offline" }
  *     { type: "fire_mission", batteryId, distance, direction, targetAltitude, clientRef }
+ *     // Resend keeps the same fireMissionUuid (stable identity for the
+ *     // mission across re-sends); artillery updates its existing record.
+ *     { type: "fire_mission_resend", batteryId, fireMissionUuid,
+ *                                    distance, direction, targetAltitude, clientRef }
  *     { type: "fire_mission_adjust", batteryId, distance, direction, targetAltitude,
  *                                    fireMissionUuid, clientRef, adjustmentNumber }
+ *     // Batched alternative for many fresh missions to one battery (Send All).
+ *     { type: "fire_mission_batch", batteryId, clientRef,
+ *         missions: [ { distance, direction, targetAltitude }, ... ] }
  *     { type: "fire_mission_receipt", fireMissionUuid, spotterSessionId }
+ *     { type: "fire_mission_batch_receipt", fireMissionUuids: [...], spotterSessionId }
  *     { type: "ping" }                       // auto-responded with "pong"
  *
  *   Server -> Client:
  *     { type: "batteries", batteries: [ { id, grid, altitude, callsign } ] }
  *     // Sent to artillery — fireMissionUuid is stable for the life of this mission.
  *     { type: "fire_mission", fireMissionUuid, from, distance, direction, targetAltitude }
+ *     // Sent to artillery — same stable fireMissionUuid; tells the client to
+ *     // update its existing record for that UUID rather than create a new one.
+ *     { type: "fire_mission_resend", fireMissionUuid, from, distance, direction, targetAltitude }
  *     // Sent to artillery — same stable fireMissionUuid, no UUID rotation.
  *     { type: "fire_mission_adjust", fireMissionUuid, from, distance, direction,
  *                                    targetAltitude, adjustmentNumber }
+ *     // Sent to artillery — batch of fresh missions; UUIDs are server-assigned.
+ *     { type: "fire_mission_batch", from,
+ *         missions: [ { fireMissionUuid, distance, direction, targetAltitude }, ... ] }
  *     // Sent to spotter after the message has been queued for delivery to artillery.
  *     // clientRef is the spotter's local correlation id from the original send.
  *     { type: "fire_mission_ack", fireMissionUuid, clientRef }
- *     // Sent to spotter when artillery explicitly receipts the fire mission.
+ *     // Batch counterpart — UUIDs are index-aligned with the request's missions.
+ *     { type: "fire_mission_batch_ack", clientRef, fireMissionUuids: [...] }
+ *     // Sent to spotter when artillery explicitly receipts the fire mission(s).
  *     { type: "fire_mission_delivered", fireMissionUuid }
+ *     { type: "fire_mission_batch_delivered", fireMissionUuids: [...] }
  *     { type: "pong" }                       // auto-response
  *     { type: "error", message: "...", clientRef? }
  *
@@ -228,6 +245,60 @@ export class ArtilleryRoom {
         return;
       }
 
+      // Resend of an existing fire mission. Reuses the original UUID rather
+      // than minting a new one so the fire-mission identity (and human-
+      // readable fireMissionId) stays stable across resends. Artillery uses
+      // the matching UUID to update its existing record (clearing the
+      // Outdated badge) instead of creating a duplicate card.
+      case "fire_mission_resend": {
+        if (session.role !== "spotter") {
+          this.send(ws, { type: "error", message: "Only spotters can resend fire missions" });
+          return;
+        }
+        if (!msg.batteryId) {
+          this.send(ws, { type: "error", message: "Battery id is required" });
+          return;
+        }
+        if (!isUuid(msg.fireMissionUuid)) {
+          this.send(ws, {
+            type: "error",
+            message: "fireMissionUuid must be a valid UUID",
+            clientRef: msg.clientRef || null,
+          });
+          return;
+        }
+        const target = this.findBatteryById(msg.batteryId);
+        if (!target) {
+          this.send(ws, {
+            type: "error",
+            message: "Battery is not online",
+            clientRef: msg.clientRef || null,
+          });
+          return;
+        }
+        const fireMissionUuid = msg.fireMissionUuid;
+        const distance = Number(msg.distance);
+        const direction = Number(msg.direction);
+        const targetAltitude = msg.targetAltitude == null || isNaN(Number(msg.targetAltitude))
+          ? null
+          : Number(msg.targetAltitude);
+
+        this.send(target.ws, {
+          type: "fire_mission_resend",
+          fireMissionUuid,
+          from: session.id,
+          distance,
+          direction,
+          targetAltitude,
+        });
+        this.send(ws, {
+          type: "fire_mission_ack",
+          fireMissionUuid,
+          clientRef: msg.clientRef == null ? null : String(msg.clientRef),
+        });
+        return;
+      }
+
       case "fire_mission_adjust": {
         if (session.role !== "spotter") {
           this.send(ws, { type: "error", message: "Only spotters can adjust fire missions" });
@@ -289,6 +360,87 @@ export class ArtilleryRoom {
           try { a = w.deserializeAttachment(); } catch (e) { continue; }
           if (a && a.id === spotterId && a.role === "spotter") {
             this.send(w, { type: "fire_mission_delivered", fireMissionUuid: msg.fireMissionUuid });
+            break;
+          }
+        }
+        return;
+      }
+
+      case "fire_mission_batch": {
+        if (session.role !== "spotter") {
+          this.send(ws, { type: "error", message: "Only spotters can send fire missions" });
+          return;
+        }
+        if (!msg.batteryId) {
+          this.send(ws, { type: "error", message: "Battery id is required" });
+          return;
+        }
+        if (!Array.isArray(msg.missions) || msg.missions.length === 0) {
+          this.send(ws, {
+            type: "error",
+            message: "missions must be a non-empty array",
+            clientRef: msg.clientRef || null,
+          });
+          return;
+        }
+        if (msg.missions.length > 25) {
+          this.send(ws, {
+            type: "error",
+            message: "Batch too large (max 25 missions)",
+            clientRef: msg.clientRef || null,
+          });
+          return;
+        }
+        const target = this.findBatteryById(msg.batteryId);
+        if (!target) {
+          this.send(ws, {
+            type: "error",
+            message: "Battery is not online",
+            clientRef: msg.clientRef || null,
+          });
+          return;
+        }
+        // Assign one stable UUID per mission, server-side.
+        const enriched = msg.missions.map((m) => {
+          const targetAltitude = m.targetAltitude == null || isNaN(Number(m.targetAltitude))
+            ? null
+            : Number(m.targetAltitude);
+          return {
+            fireMissionUuid: crypto.randomUUID(),
+            distance: Number(m.distance),
+            direction: Number(m.direction),
+            targetAltitude,
+          };
+        });
+        // 1) Deliver whole batch to artillery as a single message.
+        this.send(target.ws, {
+          type: "fire_mission_batch",
+          from: session.id,
+          missions: enriched,
+        });
+        // 2) Ack spotter with UUIDs in the same order as missions.
+        this.send(ws, {
+          type: "fire_mission_batch_ack",
+          clientRef: msg.clientRef == null ? null : String(msg.clientRef),
+          fireMissionUuids: enriched.map((m) => m.fireMissionUuid),
+        });
+        return;
+      }
+
+      case "fire_mission_batch_receipt": {
+        if (session.role !== "artillery") return;
+        if (!Array.isArray(msg.fireMissionUuids) || msg.fireMissionUuids.length === 0) return;
+        if (msg.fireMissionUuids.some((u) => !isUuid(u))) return;
+        const spotterId = msg.spotterSessionId;
+        if (!spotterId || typeof spotterId !== "string") return;
+        for (const w of this.state.getWebSockets()) {
+          let a;
+          try { a = w.deserializeAttachment(); } catch (e) { continue; }
+          if (a && a.id === spotterId && a.role === "spotter") {
+            this.send(w, {
+              type: "fire_mission_batch_delivered",
+              fireMissionUuids: msg.fireMissionUuids,
+            });
             break;
           }
         }

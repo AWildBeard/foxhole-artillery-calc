@@ -215,7 +215,7 @@
         #conn-status.reconnecting { color: #ffc107; }
         #conn-status.disconnected { color: #dc3545; }
 
-        #theme-toggle {
+        #settings-toggle {
             background: var(--input-group-bg);
             border: 1px solid var(--input-border);
             color: var(--text-color);
@@ -230,7 +230,63 @@
             flex-shrink: 0;
             margin-left: 8px;
         }
-        #theme-toggle:hover { background: var(--input-border); }
+        #settings-toggle:hover { background: var(--input-border); }
+
+        /* Settings popover (anchored under the gear button). Mirrors the
+           batteries popout style. Closes on outside click + Esc. */
+        #settings-container { position: relative; flex-shrink: 0; }
+        #settings-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 6px;
+            z-index: 300;
+            min-width: 240px;
+            background: var(--card-bg);
+            border: 1px solid var(--hr-color);
+            border-radius: 4px;
+            padding: 8px 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+        #settings-menu.open { display: block; }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+        .settings-row + .settings-row {
+            border-top: 1px solid var(--hr-color);
+        }
+        .settings-row label { margin: 0; cursor: pointer; }
+        .settings-row .setting-control { flex-shrink: 0; }
+        .settings-toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background: var(--input-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border: none;
+            padding: 0;
+        }
+        .settings-toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.15s;
+        }
+        .settings-toggle-switch.on { background: var(--btn-primary-border); }
+        .settings-toggle-switch.on::after { transform: translateX(16px); }
 
         /* Broker UI */
         .broker-step {
@@ -287,7 +343,27 @@
         .target-row.is-changing  { border-left: 4px solid #ffc107; } /* yellow - staged adjustment */
         .target-row.is-pending   { border-left: 4px solid var(--hr-color); }
         .target-row.is-failed    { border-left: 4px solid #dc3545; } /* red */
-        .target-row.is-gone      { border-left: 4px dashed #dc3545; } /* red dashed */
+        .target-row.is-resend    { border-left: 4px solid #6f42c1; } /* purple — battery came back online, needs Resend */
+        /* When in resend-needed state, the primary action button takes the
+           purple treatment to match the status pill and card border. */
+        .target-row.is-resend .btn-target-send {
+            color: #6f42c1;
+            border-color: #6f42c1;
+            background: transparent;
+        }
+        .target-row.is-resend .btn-target-send:hover:not([disabled]) {
+            background: #6f42c1;
+            color: #fff;
+        }
+        /* Archived target rows render in the Archive pane — purely informational,
+           inputs and sending controls are disabled by updateTargetRow. */
+        .target-row.is-archived {
+            border-left-style: dashed;
+            opacity: 0.88;
+        }
+        .target-row.is-archived .target-row,
+        .target-row.is-archived .target-status,
+        .target-row.is-archived .battery-state { /* keep status pills readable */ }
 
         /* Target card header: two columns — info chips flow on the left,
            action buttons stay pinned top-right. */
@@ -314,24 +390,9 @@
         /* Keep the card from blowing out the viewport on tiny screens. */
         .target-row { max-width: 100%; overflow-wrap: anywhere; }
 
-        /* Battery summary uses flex-wrap so multiple batteries flow horizontally
-           when there's room and stack vertically on narrow viewports. */
-        #broker-battery-summary {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .battery-summary {
-            flex: 1 1 240px;
-            min-width: 220px;
-            padding: 6px 12px;
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            background: var(--input-group-bg);
-            font-size: 13px;
-        }
+        /* Old `.battery-summary` card styling removed — list now lives in the
+           popout, see #broker-battery-summary rules below. */
         /* When the section is collapsed, hide content but keep the heading row visible. */
-        #broker-battery-summary.is-hidden { display: none; }
 
         /* Small, neutral info pill for grid/altitude/battery tags shown on
            the target card after a mission has been delivered. */
@@ -416,8 +477,8 @@
             /* Hide wider-viewport labels inside icon-first buttons. */
             .btn-text { display: none; }
 
-            /* Theme toggle smaller. */
-            #theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+            /* Settings toggle smaller. */
+            #settings-toggle { width: 32px; height: 32px; font-size: 14px; }
 
             /* Tighter cards. */
             .target-row { padding: 10px; }
@@ -425,9 +486,6 @@
 
             /* Tighter input groups. */
             .input-group-text { padding: 4px 8px; font-size: 12px; }
-
-            /* Battery summary: full-width items on narrow viewports. */
-            .battery-summary { flex-basis: 100%; }
 
             /* Tighter row-head spacing. */
             .target-row .row-head { gap: 4px; }
@@ -472,8 +530,99 @@
             gap: 4px;
         }
 
-        /* Adjustment details: tighter summary styling. */
+        /* Overflow menu (kebab dropdown) used on fire mission rows and pane
+           bars to collect rarely-used actions in one place. The trigger uses
+           the standard .btn .btn-sm sizing so it lines up perfectly with the
+           adjacent Send/Adjust button. */
+        .overflow-menu { position: relative; display: inline-block; }
+        .overflow-menu-btn.btn,
+        .overflow-menu-btn.btn:focus { box-shadow: none; }
+        .overflow-menu-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            background: var(--card-bg);
+            border: 1px solid var(--hr-color);
+            border-radius: 4px;
+            padding: 4px 0;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+            z-index: 100;
+            min-width: 160px;
+        }
+        .overflow-menu-list.open { display: block; }
+        .overflow-menu-list button {
+            display: block;
+            width: 100%;
+            background: transparent;
+            border: none;
+            text-align: left;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+        .overflow-menu-list button:hover { background: var(--input-group-bg); }
+        .overflow-menu-list button.danger { color: var(--btn-danger-text); }
+        .overflow-menu-list button[disabled],
+        .overflow-menu-list button[disabled]:hover {
+            opacity: 0.5; cursor: not-allowed; background: transparent;
+        }
+        .overflow-menu-list .menu-icon {
+            display: inline-block;
+            width: 16px;
+            margin-right: 8px;
+            text-align: center;
+        }
+        .overflow-menu-list hr {
+            margin: 4px 0;
+            border-color: var(--hr-color);
+        }
+
+        /* Inline adjustment block — uses the same Bootstrap row/col input
+           layout as the target inputs above, just hidden until the user
+           clicks Adjust. Looks like a natural inline extension of the card. */
+        .adjust-inline { display: none; margin-top: 6px; padding-top: 4px; }
+        .adjust-inline.open { display: block; }
+        .adjust-inline-meta {
+            font-size: 11px;
+            color: var(--input-group-text);
+            margin: 0 0 4px;
+        }
+
+        /* Tight input cells inside .target-inputs — keep the prepend label
+           compact so the input itself has room to show full data, and give
+           the input a sensible min-width so values are never clipped. */
+        .target-inputs .input-group-text {
+            padding-left: 6px;
+            padding-right: 6px;
+            font-size: 12px;
+        }
+        .target-inputs .form-control { min-width: 0; }
+        .target-inputs .target-grid    { min-width: 8em; }
+        .target-inputs .target-azim    { min-width: 4em; }
+        .target-inputs .target-dist    { min-width: 4em; }
+        .target-inputs .target-alt     { min-width: 3.5em; }
+        .target-inputs .target-spotter-azim { min-width: 4em; }
+        .target-inputs .target-adj-lr  { min-width: 4em; }
+        .target-inputs .target-adj-sa  { min-width: 4em; }
+        .target-inputs .target-battery { min-width: 0; }
+        /* Stacked col gutters above sm-breakpoint — small horizontal spacing
+           between cells (Bootstrap's no-gutters removes the default 15px). */
+        @media (min-width: 576px) {
+            .target-inputs > [class*='col-'] + [class*='col-'] {
+                /* paddings on the columns themselves are set via pr-/pl-sm-1 */
+            }
+        }
+
+        /* Adjustment details: tighter summary styling. The summary is a flex
+           row so the toggle label sits on the left and the "Send Adjustment"
+           button is right-biased on the same line. */
         details.adjustment-section > summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             cursor: pointer;
             user-select: none;
             font-size: 12px;
@@ -485,10 +634,14 @@
         details.adjustment-section > summary::before {
             content: '\25B8'; /* right-pointing triangle */
             display: inline-block;
-            margin-right: 6px;
+            flex-shrink: 0;
             transition: transform 0.15s;
         }
         details.adjustment-section[open] > summary::before { transform: rotate(90deg); }
+        details.adjustment-section > summary .adj-summary-label {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
         details.adjustment-section.disabled > summary { color: var(--input-group-text); opacity: 0.5; pointer-events: none; }
 
         .fm-id-badge {
@@ -546,6 +699,8 @@
         }
         .solution-history .history-entry.initial { border-left-color: #17a2b8; }
         .solution-history .history-entry.adjustment { border-left-color: #ffc107; }
+        .solution-history .history-entry.event { border-left-color: #dc3545; font-style: italic; }
+        .solution-history .history-entry.event.permanent { border-left-color: #ffc107; }
         .solution-history .history-entry.current { background: var(--input-group-bg); }
 
         .adjustment-section {
@@ -576,7 +731,10 @@
         .pill-delivered{ background: #28a745; color: #fff; }
         .pill-fired    { background: #28a745; color: #fff; }
         .pill-failed   { background: #dc3545; color: #fff; }
-        .pill-gone     { background: #dc3545; color: #fff; }
+        /* Additive per-row battery-state pills (do NOT affect the main status
+           pill / card border). */
+        .pill-offline   { background: #dc3545; color: #fff; }
+        .pill-resend    { background: #6f42c1; color: #fff; }
 
         /* Per-row inline error banner (e.g. battery offline on send) */
         .target-error-bar {
@@ -663,6 +821,125 @@
             #fm-search-expand-box.open { width: 120px; }
         }
 
+        /* Archive-pane search field — same mechanic as the FM search. */
+        #fm-archive-search-container { position: relative; flex-shrink: 0; }
+        #fm-archive-search-expand-box {
+            position: absolute;
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            overflow: hidden;
+            width: 0;
+            transition: width 0.2s ease;
+            display: flex;
+            align-items: center;
+            background: var(--nav-bg);
+            z-index: 10;
+            padding-right: 6px;
+        }
+        #fm-archive-search-expand-box.open { width: 170px; }
+        #fm-archive-search-expand-box input { min-width: 0; }
+        @media (max-width: 575px) {
+            #fm-archive-search-expand-box.open { width: 120px; }
+        }
+
+        /* Spotter header row: heading + grid trigger on the left, batteries
+           trigger pinned to the right. Both popouts overlay neighbouring
+           content rather than reflowing the row. */
+        .spotter-header-row {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .spotter-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 0 0 auto;
+            position: relative;
+            min-height: 38px;          /* keep row tall enough for the popout overlay */
+        }
+        .spotter-header-right {
+            flex: 0 0 auto;
+            position: relative;
+        }
+
+        /* Expandable grid input — same mechanic as the FM search field, but
+           expands to the RIGHT of the trigger so the trigger stays anchored
+           next to the "Spotter" heading. A 28 px "peek" of the input is left
+           visible while collapsed so users can see the field is there. */
+        #spotter-grid-container { position: relative; flex-shrink: 0; }
+        #spotter-grid-expand-box {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            overflow: hidden;
+            width: 28px;
+            transition: width 0.2s ease;
+            display: flex;
+            align-items: center;
+            background: var(--nav-bg);
+            z-index: 10;
+            padding-left: 6px;
+        }
+        #spotter-grid-expand-box.open { width: 240px; }
+        #spotter-grid-expand-box input { min-width: 0; }
+        /* When collapsed, the peek is a visual hint only — clicks fall
+           through to the trigger button so the user opens via the button. */
+        #spotter-grid-expand-box input { pointer-events: none; }
+        #spotter-grid-expand-box.open input { pointer-events: auto; }
+        @media (max-width: 575px) {
+            #spotter-grid-expand-box.open { width: 180px; }
+        }
+        /* Visually mark the trigger when a grid is set so the user sees the
+           field is "filled" even while collapsed. */
+        #btn-spotter-grid.has-value {
+            color: #fff;
+            background: var(--btn-info-border);
+            border-color: var(--btn-info-border);
+        }
+
+        /* Online batteries: collapsed trigger button + popover panel that
+           overlays surrounding content. Closes on outside click. */
+        #batteries-popout-container { position: relative; }
+        #broker-battery-summary {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            z-index: 30;
+            min-width: 240px;
+            max-width: min(360px, calc(100vw - 32px));
+            background: var(--card-bg);
+            border: 1px solid var(--hr-color);
+            border-radius: 4px;
+            padding: 6px 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+            overflow-y: auto;
+            max-height: 240px;
+        }
+        #broker-battery-summary.open { display: block; }
+        @media (max-width: 767px) {
+            #broker-battery-summary { max-height: 200px; }
+        }
+        #broker-battery-summary .battery-summary {
+            padding: 4px 0;
+            border-bottom: 1px dotted var(--hr-color);
+            font-size: 13px;
+        }
+        #broker-battery-summary .battery-summary:last-child { border-bottom: none; }
+        #broker-battery-summary > p { margin: 0; padding: 4px 0; }
+        #btn-toggle-batteries .batteries-count {
+            margin-left: 4px;
+            opacity: 0.85;
+            font-weight: normal;
+        }
+
         /* Tools sub-tab panel */
         .tools-sub-tab-nav {
             display: flex;
@@ -680,6 +957,63 @@
             cursor: default;
             margin-bottom: -1px;
             outline: none;
+        }
+
+        /* Pane (Target Queue / Archive, Fire Missions / Archive) tab bar.
+           Tabs sit on the left, panel-wide controls on the right. Both share
+           the bottom-border that doubles as the active tab underline. */
+        .pane-tab-nav {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--hr-color);
+            margin-bottom: 8px;          /* minimal space to the next divider/content */
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .pane-tabs { display: flex; flex-shrink: 0; }
+        .pane-controls {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding-bottom: 4px;          /* sits a touch above the underline */
+            margin-left: auto;            /* right-bias against the tabs */
+        }
+        .pane-tab-btn {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--input-group-text);
+            padding: 8px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: -1px;          /* overlap the parent bottom border */
+            transition: color 0.12s, border-color 0.12s;
+        }
+        /* The underline is the only "selection box" — no focus ring / box-shadow
+           on any state (the user explicitly wants no full-perimeter highlight). */
+        .pane-tab-btn,
+        .pane-tab-btn:focus,
+        .pane-tab-btn:active,
+        .pane-tab-btn:focus-visible {
+            outline: none;
+            box-shadow: none;
+        }
+        .pane-tab-btn:hover { color: var(--text-color); }
+        .pane-tab-btn.active {
+            color: var(--text-color);
+            border-bottom-color: var(--btn-primary-border);
+            cursor: default;
+        }
+        .pane-tab-btn .pane-tab-count {
+            margin-left: 4px;
+            opacity: 0.75;
+            font-weight: normal;
+        }
+        @media (max-width: 575px) {
+            .pane-tab-btn { padding: 6px 12px; font-size: 13px; }
         }
     </style>
     <script>
@@ -719,7 +1053,23 @@
                 <span class="btn-icon"><i class="fa-solid fa-right-from-bracket"></i></span><span class="btn-text">Leave</span>
             </button>
         </div>
-        <button id="theme-toggle" title="Toggle dark/light theme"><i class="fa-solid fa-moon"></i></button>
+        <div id="settings-container">
+            <button id="settings-toggle" title="Settings" aria-haspopup="true" aria-expanded="false" aria-label="Settings"><i class="fa-solid fa-gear"></i></button>
+            <div id="settings-menu" role="menu" aria-label="Settings">
+                <div class="settings-row">
+                    <label for="setting-theme-btn">Theme</label>
+                    <button id="setting-theme-btn" class="setting-control btn btn-sm btn-outline-secondary" type="button">
+                        <span id="setting-theme-icon"><i class="fa-solid fa-moon"></i></span>
+                        <span id="setting-theme-label">Dark</span>
+                    </button>
+                </div>
+                <div class="settings-row">
+                    <label for="setting-screen-awake">Keep screen awake</label>
+                    <button id="setting-screen-awake" class="setting-control settings-toggle-switch on" type="button"
+                            role="switch" aria-checked="true" aria-label="Keep screen awake"></button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ==================== TOOLS VIEW ==================== -->
@@ -733,7 +1083,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_spotter_alt" type="number" class="form-control" tabindex="1" autofocus placeholder="spotter altitude (optional)" aria-label="spotter altitude">
+                <input id="input_spotter_alt" type="number" inputmode="decimal" class="form-control" tabindex="1" autofocus placeholder="spotter altitude (optional)" aria-label="spotter altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -746,7 +1096,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Distance</span>
                 </div>
-                <input id="input_tar_dist" type="number" class="form-control" tabindex="2" placeholder="from spotter to target" aria-label="from spotter to target">
+                <input id="input_tar_dist" type="number" inputmode="decimal" class="form-control" tabindex="2" placeholder="from spotter to target" aria-label="from spotter to target">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -755,7 +1105,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Azimuth</span>
                 </div>
-                <input id="input_tar_azim" type="number" class="form-control" tabindex="3" placeholder="from spotter to target" aria-label="from spotter to target">
+                <input id="input_tar_azim" type="number" inputmode="decimal" class="form-control" tabindex="3" placeholder="from spotter to target" aria-label="from spotter to target">
                 <div class="input-group-append">
                     <span class="input-group-text">mills</span>
                     <button id="btn_swapcourse_tar_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1"><i class="fa-solid fa-right-left"></i></button>
@@ -765,7 +1115,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_tar_alt" type="number" class="form-control" tabindex="4" placeholder="target altitude (optional)" aria-label="target altitude">
+                <input id="input_tar_alt" type="number" inputmode="decimal" class="form-control" tabindex="4" placeholder="target altitude (optional)" aria-label="target altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -786,7 +1136,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Distance</span>
                 </div>
-                <input id="input_art_dist" type="number" class="form-control" tabindex="50">
+                <input id="input_art_dist" type="number" inputmode="decimal" class="form-control" tabindex="50">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -795,7 +1145,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Azimuth</span>
                 </div>
-                <input id="input_art_azim" type="number" class="form-control" tabindex="51">
+                <input id="input_art_azim" type="number" inputmode="decimal" class="form-control" tabindex="51">
                 <div class="input-group-append">
                     <span class="input-group-text">mills</span>
                     <button id="btn_swapcourse_art_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1"><i class="fa-solid fa-right-left"></i></button>
@@ -805,7 +1155,7 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Altitude</span>
                 </div>
-                <input id="input_art_alt" type="number" class="form-control" tabindex="52" placeholder="artillery altitude (optional)" aria-label="artillery altitude">
+                <input id="input_art_alt" type="number" inputmode="decimal" class="form-control" tabindex="52" placeholder="artillery altitude (optional)" aria-label="artillery altitude">
                 <div class="input-group-append">
                     <span class="input-group-text">meters</span>
                 </div>
@@ -814,8 +1164,8 @@
                 <div class="input-group-prepend">
                     <span class="input-group-text" style="width:5.5em">Correction</span>
                 </div>
-                <input id="input_art_corr_dir" type="number" class="form-control" tabindex="53" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
-                <input id="input_art_corr_dist" type="number" class="form-control" tabindex="54" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
+                <input id="input_art_corr_dir" type="number" inputmode="decimal" class="form-control" tabindex="53" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
+                <input id="input_art_corr_dist" type="number" inputmode="decimal" class="form-control" tabindex="54" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
                 <div class="input-group-append">
                     <span class="input-group-text">meters (viewed from spotter)</span>
                 </div>
@@ -946,7 +1296,7 @@
                             <div class="input-group-prepend">
                                 <span class="input-group-text" style="width:5.5em">Grid</span>
                             </div>
-                            <input id="arty-grid-input" type="text" class="form-control" maxlength="10"
+                            <input id="arty-grid-input" type="text" inputmode="numeric" class="form-control" maxlength="10"
                                 placeholder="6, 8, or 10-digit grid" autofocus>
                         </div>
                     </div>
@@ -955,7 +1305,7 @@
                             <div class="input-group-prepend">
                                 <span class="input-group-text" style="width:5.5em">Altitude</span>
                             </div>
-                            <input id="arty-alt-input" type="number" class="form-control" placeholder="Battery altitude">
+                            <input id="arty-alt-input" type="number" inputmode="decimal" class="form-control" placeholder="Battery altitude">
                             <div class="input-group-append">
                                 <span class="input-group-text">m</span>
                             </div>
@@ -976,70 +1326,125 @@
                 </div>
                 <p>Grid: <code id="arty-grid-display"></code> &bull; Altitude: <span id="arty-alt-display"></span>m</p>
                 <hr/>
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; position:relative">
-                    <h3 style="font-size:16pt; margin:0">Fire Missions</h3>
-                    <span id="missions-stats" class="text-muted-themed" style="font-size:13px"></span>
-                    <div id="fm-search-container" style="margin-left:auto; display:flex; gap:4px; align-items:center">
-                        <div id="fm-search-expand-box">
-                            <input id="fm-search" type="text" class="form-control form-control-sm" placeholder="Mission ID" aria-label="Filter by mission ID">
+
+                <!-- Sub-tab pane selector: tabs left, pane-wide controls right. -->
+                <div class="pane-tab-nav" role="tablist">
+                    <div class="pane-tabs">
+                        <button class="pane-tab-btn active" data-arty-pane="missions" type="button" role="tab" aria-selected="true">Fire Missions<span class="pane-tab-count" id="arty-missions-count"></span></button>
+                        <button class="pane-tab-btn" data-arty-pane="archive" type="button" role="tab" aria-selected="false">Archive<span class="pane-tab-count" id="arty-archive-count"></span></button>
+                    </div>
+                    <!-- Fire Missions pane controls: search + Archive Fired. -->
+                    <div class="pane-controls" data-arty-controls="missions">
+                        <div id="fm-search-container" style="display:flex; gap:4px; align-items:center">
+                            <div id="fm-search-expand-box">
+                                <input id="fm-search" type="text" inputmode="numeric" class="form-control form-control-sm" placeholder="Mission ID" aria-label="Filter missions by ID">
+                            </div>
+                            <button id="btn-fm-search" class="btn btn-sm btn-outline-secondary" title="Filter missions by ID" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
                         </div>
-                        <button id="btn-fm-search" class="btn btn-sm btn-outline-secondary" title="Filter missions by ID" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
-                        <button id="btn-clear-fired" class="btn btn-sm btn-outline-secondary" title="Remove all missions marked as fired" aria-label="Clear fired missions">
-                            <span class="btn-icon"><i class="fa-solid fa-xmark"></i></span><span class="btn-text">Clear Fired</span>
+                        <button id="btn-clear-fired" class="btn btn-sm btn-outline-secondary" title="Archive every mission marked as fired" aria-label="Archive fired missions">
+                            <span class="btn-icon"><i class="fa-solid fa-box-archive"></i></span><span class="btn-text">Archive Fired</span>
                         </button>
                     </div>
+                    <!-- Archive pane controls: independent search over archived missions. -->
+                    <div class="pane-controls" data-arty-controls="archive" style="display:none">
+                        <div id="fm-archive-search-container" style="display:flex; gap:4px; align-items:center">
+                            <div id="fm-archive-search-expand-box">
+                                <input id="fm-archive-search" type="text" inputmode="numeric" class="form-control form-control-sm" placeholder="Mission ID" aria-label="Filter archive by mission ID">
+                            </div>
+                            <button id="btn-fm-archive-search" class="btn btn-sm btn-outline-secondary" title="Filter archived missions by ID" aria-label="Search archive"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                    </div>
                 </div>
-                <p id="arty-no-missions" class="text-muted-themed">Waiting for fire missions from spotters&hellip;</p>
-                <div id="fire-missions-list"></div>
+
+                <!-- Fire Missions pane: non-archived missions -->
+                <div class="arty-pane" id="arty-pane-missions">
+                    <p id="arty-no-missions" class="text-muted-themed">Waiting for fire missions from spotters&hellip;</p>
+                    <div id="fire-missions-list"></div>
+                </div>
+
+                <!-- Archive pane: archived missions (delete with confirm + unarchive) -->
+                <div class="arty-pane" id="arty-pane-archive" style="display:none">
+                    <div id="fire-missions-archive">
+                        <p class="text-muted-themed">No archived fire missions.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Spotter role -->
         <div id="broker-spotter-view" style="display:none">
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; flex-wrap:wrap">
-                <h2 style="font-size:20pt; margin:0">Spotter</h2>
-            </div>
+            <div class="spotter-header-row">
+                <!-- Left: heading + expandable spotter-grid input. The grid is
+                     optional; when set it powers spotter->target azimuth math
+                     across all rows that don't supply a per-row Az override. -->
+                <div class="spotter-header-left">
+                    <h2 style="font-size:20pt; margin:0">Spotter</h2>
+                    <div id="spotter-grid-container">
+                        <div id="spotter-grid-expand-box">
+                            <input id="spotter-self-grid" type="text" inputmode="numeric" class="form-control form-control-sm"
+                                   maxlength="10"
+                                   placeholder="6, 8, or 10-digit grid"
+                                   aria-label="Spotter grid (optional)">
+                        </div>
+                        <button id="btn-spotter-grid" class="btn btn-sm btn-outline-secondary"
+                                title="Set the spotter grid (optional — enables spotter→target azimuth math)"
+                                aria-label="Spotter grid">
+                            <span class="btn-icon"><i class="fa-solid fa-location-dot"></i></span><span class="btn-text">Grid (optional)</span>
+                        </button>
+                    </div>
+                </div>
 
-            <!-- Optional session-level spotter grid. Provides a default
-                 spotter->target azimuth for adjustment math across all targets.
-                 Each target row may override with a directly-observed azimuth. -->
-            <h3 style="font-size:16pt">Spotter Grid <small class="text-muted-themed" style="font-size:12px">(optional — for static spotting)</small></h3>
-            <div class="input-group mb-2" style="max-width:520px">
-                <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Grid</span></div>
-                <input id="spotter-self-grid" type="text" class="form-control" maxlength="10" placeholder="6, 8, or 10-digit grid (change as you move)">
-            </div>
-
-            <div style="display:flex; align-items:center; gap:8px; margin-top:14px; margin-bottom:6px">
-                <h3 style="font-size:16pt; margin:0">Online Batteries</h3>
-                <span id="batteries-count" class="text-muted-themed" style="font-size:13px"></span>
-                <button id="btn-toggle-batteries" class="btn btn-sm btn-outline-secondary" style="margin-left:auto" title="Show/hide the battery list" aria-label="Show online batteries">
-                    <span class="btn-icon"><i class="fa-solid fa-chevron-down"></i></span><span class="btn-text">Show</span>
-                </button>
-            </div>
-            <div id="broker-battery-summary" class="is-hidden">
-                <p class="text-muted-themed">No batteries online in this session.</p>
+                <!-- Right: online batteries trigger. The list is collapsed by
+                     default and pops out as an overlay on click; clicking
+                     anywhere outside dismisses it. -->
+                <div class="spotter-header-right" id="batteries-popout-container">
+                    <button id="btn-toggle-batteries" class="btn btn-sm btn-outline-secondary"
+                            title="Show online batteries"
+                            aria-label="Show online batteries"
+                            aria-haspopup="true" aria-expanded="false">
+                        <span class="btn-icon"><i class="fa-solid fa-list"></i></span><span class="btn-text">Batteries</span><span class="batteries-count" id="batteries-count"></span>
+                    </button>
+                    <div id="broker-battery-summary" role="dialog" aria-label="Online batteries">
+                        <p class="text-muted-themed">No batteries online in this session.</p>
+                    </div>
+                </div>
             </div>
 
             <hr/>
 
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap">
-                <h3 style="font-size:16pt; margin:0">Target Queue</h3>
-                <span id="spotter-stats" class="text-muted-themed" style="font-size:13px"></span>
-                <div style="margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+            <!-- Sub-tab pane selector: tabs left, pane-wide controls right. -->
+            <div class="pane-tab-nav" role="tablist">
+                <div class="pane-tabs">
+                    <button class="pane-tab-btn active" data-spotter-pane="queue" type="button" role="tab" aria-selected="true">Target Queue<span class="pane-tab-count" id="spotter-queue-count"></span></button>
+                    <button class="pane-tab-btn" data-spotter-pane="archive" type="button" role="tab" aria-selected="false">Archive<span class="pane-tab-count" id="spotter-archive-count"></span></button>
+                </div>
+                <div class="pane-controls" data-spotter-controls="queue">
                     <button id="btn-add-target" class="btn btn-sm btn-outline-primary" title="Add a new target" aria-label="Add target">
                         <span class="btn-icon"><i class="fa-solid fa-plus"></i></span><span class="btn-text">Add Target</span>
                     </button>
                     <button id="btn-send-all-targets" class="btn btn-sm btn-outline-primary" title="Send every queued target that has a battery and a valid grid" aria-label="Send all queued">
                         <span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Send All</span>
                     </button>
-                    <button id="btn-clear-sent-targets" class="btn btn-sm btn-outline-secondary" title="Remove every target that has already been sent" aria-label="Clear sent">
-                        <span class="btn-icon"><i class="fa-solid fa-xmark"></i></span><span class="btn-text">Clear Sent</span>
+                    <button id="btn-archive-sent-targets" class="btn btn-sm btn-outline-secondary" title="Archive every target whose last state is Delivered" aria-label="Archive Sent">
+                        <span class="btn-icon"><i class="fa-solid fa-box-archive"></i></span><span class="btn-text">Archive Sent</span>
                     </button>
+                </div>
+                <!-- No archive-pane-wide controls for the spotter. -->
+                <div class="pane-controls" data-spotter-controls="archive" style="display:none"></div>
+            </div>
+
+            <!-- Target Queue pane: non-archived targets -->
+            <div class="spotter-pane" id="spotter-pane-queue">
+                <div id="spotter-targets-container">
+                    <p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>
                 </div>
             </div>
 
-            <div id="spotter-targets-container">
-                <p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>
+            <!-- Archive pane: archived targets (read-only, with delete / unarchive / copy) -->
+            <div class="spotter-pane" id="spotter-pane-archive" style="display:none">
+                <div id="spotter-archive-container">
+                    <p class="text-muted-themed">No archived fire missions.</p>
+                </div>
             </div>
         </div>
 
@@ -1047,6 +1452,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-fQybjgWLrvvRgtW6bFlB7jaZrFsaBXjsOMm/tB9LTS58ONXgqbR9W8oWht/amnpF" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="./js/util.js"></script>
     <script type="text/javascript" src="./js/artycalc.js"></script>
     <script type="text/javascript" src="./js/broker.js"></script>
     <script type="text/javascript">
@@ -1251,12 +1657,12 @@
                 <h2 style="font-size:20pt">Target Reference Point (TRP) #{newTRPid}</h2>
                 <div class="input-group mb-0">
                     <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Distance</span></div>
-                    <input id="input_trp_{newTRPid}_dist" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_dist}">
+                    <input id="input_trp_{newTRPid}_dist" type="number" inputmode="decimal" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_dist}">
                     <div class="input-group-append"><span class="input-group-text">meters</span></div>
                 </div>
                 <div class="input-group mb-0">
                     <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Azimuth</span></div>
-                    <input id="input_trp_{newTRPid}_azim" type="number" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
+                    <input id="input_trp_{newTRPid}_azim" type="number" inputmode="decimal" placeholder="-" class="form-control" aria-label="-" tabindex="{tabindex_azim}">
                     <div class="input-group-append">
                         <span class="input-group-text">mills</span>
                         <button id="btn_swapcourse_trp_{newTRPid}_azim" class="btn btn-outline-secondary" title="swap backcourse" tabindex="-1"><i class="fa-solid fa-right-left"></i></button>
@@ -1264,7 +1670,7 @@
                 </div>
                 <div class="input-group mb-3">
                     <div class="input-group-prepend"><span class="input-group-text" style="width:5.5em">Altitude</span></div>
-                    <input id="input_trp_{newTRPid}_alt" type="number" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters" tabindex="{tabindex_alt}">
+                    <input id="input_trp_{newTRPid}_alt" type="number" inputmode="decimal" placeholder="(optional) altitude in meters" class="form-control" aria-label="altitude in meters" tabindex="{tabindex_alt}">
                     <div class="input-group-append"><span class="input-group-text">meters</span></div>
                 </div>
             </section>`;
@@ -1416,27 +1822,43 @@
         //   id, label, labelIsCustom,
         //   gridInputRaw, gridExpanded, altitude, batteryId,
         //   adjLR, adjSA,                          (current values in the input boxes)
-        //   adjPendingLR, adjPendingSA,            (values used for the in-flight adjustment send)
-        //   history: [ { seq, kind:'initial'|'adjustment', clientRef, computed:{distance,direction,targetAltitude},
-        //                adjustment:{lr,sa}|null, sentAt, deliveredAt, uuid } ],
+        //   history: fire-mission history; entry kinds are (all PERMANENT):
+        //     { kind:'initial'|'adjustment', seq, clientRef,
+        //       computed:{distance,direction,targetAltitude}, adjustment:{lr,sa}|null,
+        //       sentAt, deliveredAt, uuid, isResend? }
+        //     { kind:'battery_offline', time }       — battery dropped from local list
+        //     { kind:'battery_online',  grid, time } — battery returned
         //   firstUuid, fireMissionId,
-        //   batteryGrid, batteryCallsign,         (snapshot at send-time for remap)
-        //   errorMessage, errorTimer,             (transient inline error state)
-        //   adjustmentsDelivered, sendInFlight
+        //   batteryGrid, batteryCallsign,           (snapshot at first send; grid silently
+        //                                            tracks the battery if it moves)
+        //   batteryWasReachable,                    (last-known reachability for transition log)
+        //   errorMessage, errorTimer,               (transient inline error state)
+        //   adjustmentsDelivered, sendInFlight,
+        //   adjustOpen,                             (true once user clicked Adjust)
+        //   archived, pendingRemoval                (archive lifecycle)
         var spotterTargets = [];
         var nextTargetId = 1;
         var nextClientRef = 1;
         // Tracks in-flight sends for retry on transient "battery offline" errors.
-        // keyed by clientRef -> { fn, deadline, timer }
+        // keyed by clientRef -> { fn, deadline, timer, batteryId }
         var pendingRetries = {};
+        // For batched sends (Send All): maps the batch's outer clientRef to
+        // the list of individual per-target clientRefs in the batch, so the
+        // ack/delivered/rollback paths can fan out across the batch members.
+        var pendingBatches = {};
 
         // Artillery incoming missions.
         // Each entry:
         //   fireMissionId, fireMissionUuid,
         //   from, batteryCallsignAtReceive,
         //   history: [ { kind:'initial'|'adjustment', distance, direction, targetAltitude, time, adjustmentNumber? } ],
-        //   fired, firedAt, receivedAt
+        //   fired, firedAt, receivedAt,
+        //   archived, pendingRemoval
         var artilleryMissions = [];
+
+        // Active sub-tab per role view.
+        var spotterPane = 'queue';     // 'queue' | 'archive'
+        var artyPane    = 'missions';  // 'missions' | 'archive'
 
         function showBrokerSection(id) {
             $('#broker-entry, #broker-role-select, #broker-arty-view, #broker-spotter-view').hide();
@@ -1471,24 +1893,23 @@
             brokerBatteries = batteries;
             spotterTargets.forEach(function(t) {
                 if (!t.batteryId) return;
-                if (brokerBatteries.find(function(b) { return b.id === t.batteryId; })) return;
-                // Current batteryId is no longer online.
+                if (t.archived) return; // archive snapshots are frozen
                 if (!t.firstUuid) {
-                    // Pre-delivery: just drop the stale id; user picks again.
-                    t.batteryId = null;
+                    // Pre-delivery: just drop a stale id so the user re-picks.
+                    if (!brokerBatteries.find(function(b) { return b.id === t.batteryId; })) {
+                        t.batteryId = null;
+                    }
                     return;
                 }
-                // Post-delivery: try to remap to a battery that came back online
-                // with the same grid (and callsign, if we have one). This lets
-                // adjustments resume after a brief artillery-client reconnect
-                // without the user having to re-pick anything.
-                if (!t.batteryGrid) return;
-                var remap = brokerBatteries.find(function(b) {
-                    if (b.grid !== t.batteryGrid) return false;
-                    if (t.batteryCallsign == null) return true;
-                    return b.callsign === t.batteryCallsign;
-                });
-                if (remap) t.batteryId = remap.id;
+                // Post-delivery: emit / remove offline+relocated history events
+                // and silently remap t.batteryId when the same callsign comes
+                // back at the same grid with a new session id.
+                reconcileBatteryState(t);
+                if (!brokerBatteries.find(function(b) { return b.id === t.batteryId; })) {
+                    // No remap (callsign isn't online anywhere). Leave t.batteryId
+                    // pointing at the stale id so the row keeps remembering which
+                    // battery it was bound to — UI treats it as "offline".
+                }
             });
             renderBatterySummary();
             renderSpotterTargets();
@@ -1496,7 +1917,18 @@
 
         broker.onFireMission = function(msg) {
             var fireMissionUuid = msg.fireMissionUuid || null;
-            var fmId = fireMissionUuid ? uuidToNumericId(fireMissionUuid) : String(artilleryMissions.length + 1);
+            var fmId = fireMissionUuid ? artycal.uuidToNumericId(fireMissionUuid) : String(artilleryMissions.length + 1);
+
+            // Idempotency: if we've already received this fire mission UUID,
+            // skip re-rendering but STILL ack with a receipt so the spotter
+            // sees delivery even on the retry path.
+            if (fireMissionUuid && artilleryMissions.some(function(x) {
+                return x.fireMissionUuid === fireMissionUuid;
+            })) {
+                broker.sendFireMissionReceipt(fireMissionUuid, msg.from);
+                return;
+            }
+
             var m = {
                 fireMissionId: fmId,
                 fireMissionUuid: fireMissionUuid,
@@ -1514,8 +1946,48 @@
                 fired: false,
                 firedAt: null,
                 receivedAt: new Date().toLocaleTimeString(),
+                // Snapshot of the artillery's grid at receive time. Used to
+                // lock archived missions out of being unarchived after the
+                // battery moves — the math was computed for THIS grid.
+                batteryGridAtReceive: artyLastOnlineGrid,
             };
             artilleryMissions.push(m);
+            broker.sendFireMissionReceipt(fireMissionUuid, msg.from);
+            renderMissionsList();
+        };
+
+        // Resend of an existing fire mission. Same UUID arrives → find the
+        // record on file and refresh it in place: push a new 'initial' entry,
+        // clear fired/archived state, bump batteryGridAtReceive to current
+        // grid (which clears the Outdated badge). If the mission isn't on
+        // file (rare — perhaps it was deleted), fall through to onFireMission
+        // so the operator still sees the inbound traffic as a fresh card.
+        broker.onFireMissionResend = function(msg) {
+            var fireMissionUuid = msg.fireMissionUuid || null;
+            if (!fireMissionUuid) return;
+            var m = artilleryMissions.find(function(x) { return x.fireMissionUuid === fireMissionUuid; });
+            if (!m) {
+                broker.onFireMission(msg);
+                return;
+            }
+            m.history.push({
+                kind: 'initial',
+                distance: Number(msg.distance),
+                direction: Number(msg.direction),
+                targetAltitude: (msg.targetAltitude == null || isNaN(Number(msg.targetAltitude)))
+                    ? null
+                    : Number(msg.targetAltitude),
+                time: new Date().toLocaleTimeString(),
+                adjustmentNumber: null,
+                isResend: true,
+            });
+            m.from = msg.from || m.from;
+            m.fired = false;
+            m.firedAt = null;
+            m.archived = false;
+            m.pendingRemoval = false;
+            m.receivedAt = new Date().toLocaleTimeString();
+            m.batteryGridAtReceive = artyLastOnlineGrid;
             broker.sendFireMissionReceipt(fireMissionUuid, msg.from);
             renderMissionsList();
         };
@@ -1524,10 +1996,27 @@
             // Find the mission by its stable UUID and append a new history entry.
             var fireMissionUuid = msg.fireMissionUuid || null;
             var m = artilleryMissions.find(function(x) { return x.fireMissionUuid === fireMissionUuid; });
+            // Auto-unarchive: an inbound adjustment for an archived mission
+            // brings it back to the Fire Missions pane so the artillery can
+            // see the new firing solution and act on it.
+            if (m && m.archived) {
+                m.archived = false;
+                m.pendingRemoval = false;
+            }
             if (!m) {
                 // Missed the original — render as a stand-alone entry so the
                 // artillery isn't blind to incoming traffic.
                 broker.onFireMission(msg);
+                return;
+            }
+            // Idempotency: if this exact adjustment number is already on the
+            // history, this is a re-delivery — just re-receipt and skip the
+            // duplicate push.
+            var adjNum = msg.adjustmentNumber == null ? null : Number(msg.adjustmentNumber);
+            if (adjNum != null && m.history.some(function(h) {
+                return h.kind === 'adjustment' && h.adjustmentNumber === adjNum;
+            })) {
+                broker.sendFireMissionReceipt(fireMissionUuid, msg.from);
                 return;
             }
             m.history.push({
@@ -1538,13 +2027,60 @@
                     ? null
                     : Number(msg.targetAltitude),
                 time: new Date().toLocaleTimeString(),
-                adjustmentNumber: msg.adjustmentNumber == null ? null : Number(msg.adjustmentNumber),
+                adjustmentNumber: adjNum,
             });
             // A new adjustment "unfires" the mission since there's something new to shoot.
             m.fired = false;
             m.firedAt = null;
             broker.sendFireMissionReceipt(fireMissionUuid, msg.from);
             renderMissionsList();
+        };
+
+        broker.onFireMissionBatch = function(msg) {
+            // Spotter pushed multiple fresh fire missions in one message.
+            // Render each as its own card and send ONE batched receipt covering
+            // every UUID so the spotter sees a single end-to-end delivery
+            // confirmation for the whole batch (not N separate ones).
+            //
+            // Idempotency: if a UUID we already have arrives again (retry path
+            // or duplicate forward), don't re-render — but DO still include it
+            // in the receipt so the spotter still sees that UUID delivered.
+            var missions = msg.missions || [];
+            var uuids = [];
+            var rendered = 0;
+            missions.forEach(function(m) {
+                var fireMissionUuid = m.fireMissionUuid || null;
+                if (!fireMissionUuid) return;
+                uuids.push(fireMissionUuid);
+                if (artilleryMissions.some(function(x) { return x.fireMissionUuid === fireMissionUuid; })) {
+                    return;
+                }
+                var fmId = artycal.uuidToNumericId(fireMissionUuid);
+                artilleryMissions.push({
+                    fireMissionId: fmId,
+                    fireMissionUuid: fireMissionUuid,
+                    from: msg.from || null,
+                    history: [{
+                        kind: 'initial',
+                        distance: Number(m.distance),
+                        direction: Number(m.direction),
+                        targetAltitude: (m.targetAltitude == null || isNaN(Number(m.targetAltitude)))
+                            ? null
+                            : Number(m.targetAltitude),
+                        time: new Date().toLocaleTimeString(),
+                        adjustmentNumber: null,
+                    }],
+                    fired: false,
+                    firedAt: null,
+                    receivedAt: new Date().toLocaleTimeString(),
+                    batteryGridAtReceive: artyLastOnlineGrid,
+                });
+                rendered++;
+            });
+            if (uuids.length > 0) {
+                broker.sendFireMissionBatchReceipt(uuids, msg.from || null);
+                if (rendered > 0) renderMissionsList();
+            }
         };
 
         broker.onFireMissionAck = function(msg) {
@@ -1570,11 +2106,25 @@
             }
 
             entry.uuid = fireMissionUuid;
-            if (!t.firstUuid && fireMissionUuid) {
+            // First send establishes mission identity. Resends reuse the same
+            // UUID (worker doesn't mint a new one) so the firstUuid / fireMissionId
+            // pair stays stable across the mission's lifetime.
+            if (fireMissionUuid && !t.firstUuid) {
                 t.firstUuid = fireMissionUuid;
-                t.fireMissionId = uuidToNumericId(fireMissionUuid);
+                t.fireMissionId = artycal.uuidToNumericId(fireMissionUuid);
+            }
+            // A Resend ack also clears the "needs resend" state — the new
+            // send is in flight at the (possibly new) battery position; the
+            // row returns to normal (Delivered will follow when the receipt lands).
+            if (entry.isResend) {
+                t.needsResend = false;
             }
             t.sendInFlight = false;
+            // Server has the message — now wait for the artillery's end-to-end
+            // receipt. If it never arrives, the watchdog flags this entry as
+            // delivery-uncertain so the user sees that the artillery never
+            // confirmed receipt.
+            startDeliveryWatchdog(t, entry);
             renderSpotterTargets();
         };
 
@@ -1591,21 +2141,114 @@
             }
             if (!entry) return;
             entry.deliveredAt = new Date().toLocaleTimeString();
+            stopDeliveryWatchdog(entry);
             if (entry.kind === 'adjustment') {
                 t.adjustmentsDelivered = (t.adjustmentsDelivered || 0) + 1;
-                t.adjLR = null;
-                t.adjSA = null;
+                // (Inputs were cleared at send time so the user can start
+                // typing the next adjustment as soon as the ack lands; do NOT
+                // clear here — would wipe values the user has typed for the
+                // next adjustment while waiting for this delivery receipt.)
             }
             renderSpotterTargets();
         };
 
+        broker.onFireMissionBatchAck = function(msg) {
+            // The server has queued the batch for delivery to artillery and
+            // returned the assigned UUIDs (index-aligned with the missions we
+            // sent). Walk the saved member refs in lockstep and mark each
+            // history entry "sent".
+            var batchRef = msg.clientRef;
+            var uuids = msg.fireMissionUuids || [];
+            var memberRefs = pendingBatches[batchRef] || [];
+            // Clear retry tracking for the batch — delivery confirmation now
+            // comes via fire_mission_batch_delivered, not the ack.
+            if (pendingRetries[batchRef]) {
+                clearTimeout(pendingRetries[batchRef].timer);
+                delete pendingRetries[batchRef];
+            }
+            // Don't delete pendingBatches yet — the delivered callback uses
+            // the same map to fan out, indexed by the assigned UUIDs (which
+            // we're about to write onto each target).
+            memberRefs.forEach(function(memberRef, idx) {
+                var assignedUuid = uuids[idx] || null;
+                for (var ti = 0; ti < spotterTargets.length; ti++) {
+                    var tt = spotterTargets[ti];
+                    var found = false;
+                    for (var j = tt.history.length - 1; j >= 0; j--) {
+                        if (tt.history[j].clientRef === memberRef) {
+                            var entry = tt.history[j];
+                            entry.uuid = assignedUuid;
+                            if (!tt.firstUuid && assignedUuid) {
+                                tt.firstUuid = assignedUuid;
+                                tt.fireMissionId = artycal.uuidToNumericId(assignedUuid);
+                            }
+                            tt.sendInFlight = false;
+                            // Same delivery watchdog as the single-send path —
+                            // the worker has the mission; we're waiting on the
+                            // artillery's end-to-end batch receipt.
+                            startDeliveryWatchdog(tt, entry);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) break;
+                }
+            });
+            // pendingBatches still useful while we wait for delivery? No — the
+            // delivered notification carries the UUIDs directly, so we can drop
+            // it now. (Rollback after this point is impossible: ack means the
+            // worker has the batch in hand.)
+            delete pendingBatches[batchRef];
+            renderSpotterTargets();
+        };
+
+        broker.onFireMissionBatchDelivered = function(msg) {
+            var uuids = msg.fireMissionUuids || [];
+            var dirty = false;
+            uuids.forEach(function(uuid) {
+                if (!uuid) return;
+                var t = spotterTargets.find(function(x) { return x.firstUuid === uuid; });
+                if (!t) return;
+                var entry = null;
+                for (var i = t.history.length - 1; i >= 0; i--) {
+                    if (!t.history[i].deliveredAt) { entry = t.history[i]; break; }
+                }
+                if (!entry) return;
+                entry.deliveredAt = new Date().toLocaleTimeString();
+                stopDeliveryWatchdog(entry);
+                dirty = true;
+            });
+            if (dirty) renderSpotterTargets();
+        };
+
         broker.onError = function(message, clientRef) {
-            // Transient "battery offline" — retry up to 3 s before surfacing.
+            // Transient "battery offline" — retry up to 2 s before surfacing.
             if (clientRef && message === 'Battery is not online' && pendingRetries[clientRef]) {
                 var pending = pendingRetries[clientRef];
+                // Short-circuit: if the battery has dropped off our local list
+                // since the send started, no amount of retrying will help —
+                // give up immediately instead of burning the rest of the window.
+                if (pending.batteryId &&
+                    !brokerBatteries.find(function(b) { return b.id === pending.batteryId; })) {
+                    clearTimeout(pending.timer);
+                    delete pendingRetries[clientRef];
+                    rollbackInFlight(clientRef);
+                    return;
+                }
                 if (Date.now() < pending.deadline) {
+                    // Replace the in-flight safety/retry timer with the next
+                    // retry — clearTimeout the previous one so they don't both
+                    // fire concurrently.
+                    clearTimeout(pending.timer);
                     pending.timer = setTimeout(function() {
                         if (!pendingRetries[clientRef]) return; // resolved by ack
+                        // Re-check local battery list inside the timer too.
+                        if (pending.batteryId &&
+                            !brokerBatteries.find(function(b) { return b.id === pending.batteryId; })) {
+                            delete pendingRetries[clientRef];
+                            rollbackInFlight(clientRef);
+                            return;
+                        }
                         if (!pending.fn()) {
                             // Socket disconnected mid-retry — give up immediately.
                             delete pendingRetries[clientRef];
@@ -1613,6 +2256,7 @@
                         }
                     }, 500);
                 } else {
+                    clearTimeout(pending.timer);
                     delete pendingRetries[clientRef];
                     rollbackInFlight(clientRef);
                 }
@@ -1622,23 +2266,62 @@
         };
 
         function rollbackInFlight(clientRef) {
+            // Batch sends store their member refs in pendingBatches — dispatch
+            // there so every target in the batch is rolled back together.
+            if (pendingBatches[clientRef]) {
+                rollbackBatch(clientRef);
+                return;
+            }
             for (var i = 0; i < spotterTargets.length; i++) {
                 var t = spotterTargets[i];
                 for (var j = t.history.length - 1; j >= 0; j--) {
                     if (t.history[j].clientRef === clientRef) {
                         var wasAdjustment = t.history[j].kind === 'adjustment';
+                        // Cancel any pending delivery watchdog before splicing
+                        // so we don't dangle a timer pointing at a freed entry.
+                        stopDeliveryWatchdog(t.history[j]);
                         t.history.splice(j, 1);
                         t.sendInFlight = false;
                         setTargetError(
                             t,
-                            'Battery is offline — ' + (wasAdjustment ? 'adjustment' : 'fire mission') +
-                                ' was not delivered. Re-send once the battery is back online.'
+                            (wasAdjustment ? 'Adjustment' : 'Fire mission') +
+                                ' was not delivered — battery is offline or unresponsive. Re-send to try again.'
                         );
                         renderSpotterTargets();
                         return;
                     }
                 }
             }
+        }
+
+        // Roll back every target in a batched send — used when the batch ack
+        // never arrives (server returned "Battery is not online" past the
+        // retry deadline, or the socket failed mid-retry).
+        function rollbackBatch(batchRef) {
+            var memberRefs = pendingBatches[batchRef];
+            if (!memberRefs) return;
+            delete pendingBatches[batchRef];
+            memberRefs.forEach(function(memberRef) {
+                for (var i = 0; i < spotterTargets.length; i++) {
+                    var t = spotterTargets[i];
+                    var matched = false;
+                    for (var j = t.history.length - 1; j >= 0; j--) {
+                        if (t.history[j].clientRef === memberRef) {
+                            stopDeliveryWatchdog(t.history[j]);
+                            t.history.splice(j, 1);
+                            t.sendInFlight = false;
+                            setTargetError(
+                                t,
+                                'Fire mission was not delivered — battery is offline or unresponsive. Re-send to try again.'
+                            );
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (matched) break;
+                }
+            });
+            renderSpotterTargets();
         }
 
         // Sets a transient error on a target; auto-clears after 8 s so the
@@ -1659,21 +2342,109 @@
             t.errorMessage = null;
         }
 
-        // Returns true when this target's artillery is online but no longer at
-        // the grid it was at when the original fire mission was sent — sending
-        // an "adjustment" would land at a totally different fire solution.
-        // Detected when:
-        //   (a) same WebSocket id is online but grid changed, or
-        //   (b) the same callsign is online at a different grid.
-        // A merely-offline battery (might come back at the same grid) is NOT
-        // "gone" — that case still uses the existing send/retry/rollback path.
-        function isBatteryGone(t) {
+        // True when a delivered target's battery isn't currently in our local
+        // online-batteries list. Used to disable send/adjust while still
+        // letting the user copy or remove the row.
+        function isBatteryOffline(t) {
+            if (!t.firstUuid || !t.batteryId) return false;
+            return !brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+        }
+
+        // Reconcile a delivered target against the current online-batteries
+        // list. Keeps t.batteryId pointing at the live artillery client (by
+        // callsign), silently updates t.batteryGrid if the artillery moved
+        // (the fire-solution math automatically recomputes against the new
+        // grid), and logs reachability transitions to the permanent history.
+        // Returns true if something changed so the caller knows to re-render.
+        function reconcileBatteryState(t) {
             if (!t.firstUuid || !t.batteryGrid) return false;
+            var changed = false;
+
+            // Look up by current id first. If stale but the callsign is back
+            // online (same or different grid), silently rebind to the new
+            // session id. The fire-mission math uses battery.grid directly so
+            // a grid change just produces fresh numbers — no special UI.
             var current = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
-            if (current) return current.grid !== t.batteryGrid;
-            if (!t.batteryCallsign) return false;
-            var byCallsign = brokerBatteries.find(function(b) { return b.callsign === t.batteryCallsign; });
-            return !!(byCallsign && byCallsign.grid !== t.batteryGrid);
+            if (!current && t.batteryCallsign) {
+                var byCallsign = brokerBatteries.find(function(b) {
+                    return b.callsign === t.batteryCallsign;
+                });
+                if (byCallsign) {
+                    t.batteryId = byCallsign.id;
+                    current = byCallsign;
+                }
+            }
+            if (current && current.grid !== t.batteryGrid) {
+                t.batteryGrid = current.grid;          // silent update; no pill, no flag
+                changed = true;
+            }
+
+            // Reachability transition log — both battery_offline and
+            // battery_online events are PERMANENT history. The first reconcile
+            // after a fresh send just seeds the prior-known state without
+            // emitting an event.
+            var nowReachable = !!current;
+            if (t.batteryWasReachable === undefined) {
+                t.batteryWasReachable = nowReachable;
+            } else if (t.batteryWasReachable && !nowReachable) {
+                t.history.push({
+                    kind: 'battery_offline',
+                    time: new Date().toLocaleTimeString(),
+                });
+                t.batteryWasReachable = false;
+                changed = true;
+            } else if (!t.batteryWasReachable && nowReachable) {
+                t.history.push({
+                    kind: 'battery_online',
+                    grid: current.grid,
+                    time: new Date().toLocaleTimeString(),
+                });
+                t.batteryWasReachable = true;
+                // Battery came back online → the artillery client almost
+                // certainly archived its copy of this mission while offline
+                // (and may have moved). The spotter must Resend to deliver a
+                // fresh solution before this row can be acted on again. Treat
+                // the row as if it had never been sent: no adjustments, no
+                // staged values, no historic adjustment replay.
+                if (!t.archived && t.firstUuid) {
+                    t.needsResend  = true;
+                    t.adjustOpen   = false;
+                    t.adjLR        = null;
+                    t.adjSA        = null;
+                    t.spotterAzimOverride = null;
+                }
+                changed = true;
+            }
+            return changed;
+        }
+
+        // Most recent fire-solution history entry ('initial' or 'adjustment'),
+        // skipping non-solution lifecycle events. Returns the raw record or null.
+        function lastSolutionEntry(t) {
+            for (var i = t.history.length - 1; i >= 0; i--) {
+                var h = t.history[i];
+                if (h.kind === 'initial' || h.kind === 'adjustment') return h;
+            }
+            return null;
+        }
+
+        // Arm the deadline timer on a freshly-registered pendingRetries entry.
+        // This is the SAFETY NET for silent failures: if the worker never
+        // responds at all (e.g. it doesn't recognise the message type), the
+        // entry rolls back automatically when its deadline expires. The
+        // existing retry chain in broker.onError re-uses the same `timer`
+        // slot, so this safety timer is naturally replaced once an error
+        // schedules an active retry.
+        function armSafetyTimer(clientRef) {
+            var entry = pendingRetries[clientRef];
+            if (!entry) return;
+            var msLeft = Math.max(0, entry.deadline - Date.now());
+            entry.timer = setTimeout(function() {
+                if (pendingRetries[clientRef]) {
+                    delete pendingRetries[clientRef];
+                    rollbackInFlight(clientRef);
+                }
+            }, msLeft);
         }
 
         function clearPendingRetries() {
@@ -1681,6 +2452,42 @@
                 clearTimeout(pendingRetries[ref].timer);
             });
             pendingRetries = {};
+            pendingBatches = {};
+            // Cancel any active delivery watchdogs on every target entry.
+            spotterTargets.forEach(function(t) {
+                t.history.forEach(function(h) {
+                    if (h.deliveryWatchdog) {
+                        clearTimeout(h.deliveryWatchdog);
+                        h.deliveryWatchdog = null;
+                    }
+                });
+            });
+        }
+
+        // Per-entry delivery watchdog. The spotter has been ack'd by the worker
+        // (so the message reached the server), but the artillery's application-
+        // level receipt hasn't come back. If nothing arrives within
+        // DELIVERY_WATCHDOG_MS, treat it as a hard delivery failure — the same
+        // UX the pre-ack 2 s retry uses on expiry: splice the in-flight entry,
+        // clear sendInFlight, surface a transient inline error banner. The
+        // user resends manually if they still want this mission. (Window
+        // intentionally matches the pre-ack retry window so the two phases
+        // share the same "give up after 2 s" rule.)
+        var DELIVERY_WATCHDOG_MS = 2000;
+        function startDeliveryWatchdog(t, entry) {
+            if (entry.deliveryWatchdog) clearTimeout(entry.deliveryWatchdog);
+            entry.deliveryWatchdog = setTimeout(function() {
+                entry.deliveryWatchdog = null;
+                if (entry.deliveredAt) return;     // already confirmed
+                if (!entry.clientRef) return;      // nothing to roll back by
+                rollbackInFlight(entry.clientRef);
+            }, DELIVERY_WATCHDOG_MS);
+        }
+        function stopDeliveryWatchdog(entry) {
+            if (entry.deliveryWatchdog) {
+                clearTimeout(entry.deliveryWatchdog);
+                entry.deliveryWatchdog = null;
+            }
         }
 
         // ----- OP Code entry -----
@@ -1707,6 +2514,7 @@
             $('#arty-online-section').hide();
             artilleryMissions = [];
             renderMissionsList();
+            if (window.refreshWakeLock) window.refreshWakeLock();
         });
 
         $('#btn-role-spotter').click(function() {
@@ -1720,6 +2528,7 @@
             spotterSelf = { gridExpanded: null };
             $('#spotter-self-grid').val('');
             renderSpotterTargets();
+            if (window.refreshWakeLock) window.refreshWakeLock();
         });
 
         // ----- Leave session -----
@@ -1733,6 +2542,7 @@
             setSessionNav(false);
             setConnStatus('disconnected');
             showBrokerSection('broker-entry');
+            if (window.refreshWakeLock) window.refreshWakeLock();
             $('#broker-opcode-input').val('');
             $('#arty-callsign-input').val('').prop('disabled', false);
             artyCallsignLocked = null;
@@ -1740,14 +2550,17 @@
             $('#arty-grid-input').val('');
             $('#arty-alt-input').val('');
             $('#spotter-self-grid').val('');
-            $('#broker-battery-summary').addClass('is-hidden');
-            $('#btn-toggle-batteries').find('.btn-text').text('Show');
-            $('#btn-toggle-batteries').find('.btn-icon').html('<i class="fa-solid fa-chevron-down"></i>');
+            $('#spotter-grid-expand-box').removeClass('open');
+            $('#btn-spotter-grid').removeClass('has-value');
+            $('#broker-battery-summary').removeClass('open');
+            $('#btn-toggle-batteries').attr('aria-expanded', 'false');
             $('#arty-setup-section').show();
             $('#arty-online-section').hide();
             $('#fire-missions-list').empty();
             $('#fm-search').val('');
             $('#fm-search-expand-box').removeClass('open');
+            $('#fm-archive-search').val('');
+            $('#fm-archive-search-expand-box').removeClass('open');
             $('#arty-no-missions').show();
             renderBatterySummary();
             renderSpotterTargets();
@@ -1759,12 +2572,50 @@
             broker.reconnect();
         });
 
-        // ----- Battery list collapse toggle (defaults to collapsed) -----
-        $('#btn-toggle-batteries').click(function() {
-            var summary = $('#broker-battery-summary');
-            var hidden = summary.toggleClass('is-hidden').hasClass('is-hidden');
-            $(this).find('.btn-text').text(hidden ? 'Show' : 'Hide');
-            $(this).find('.btn-icon').html(hidden ? '<i class="fa-solid fa-chevron-down"></i>' : '<i class="fa-solid fa-chevron-up"></i>');
+        // ----- Spotter grid: expandable input (mirrors the FM search field) -----
+        $('#btn-spotter-grid').click(function(e) {
+            e.stopPropagation();
+            var box = $('#spotter-grid-expand-box');
+            if (box.hasClass('open')) {
+                box.removeClass('open');
+            } else {
+                box.addClass('open');
+                setTimeout(function() { $('#spotter-self-grid').focus(); }, 210);
+            }
+        });
+        $(document).on('keydown', '#spotter-self-grid', function(e) {
+            if (e.key === 'Escape') {
+                $('#spotter-grid-expand-box').removeClass('open');
+                $(this).blur();
+            }
+        });
+        // NOTE: intentionally no blur-collapse — the field stays open until
+        // the trigger button is clicked again. A blur handler here would race
+        // with the trigger click (blur fires first, removes .open, then the
+        // click handler sees "not open" and re-opens) making the button feel
+        // like it doesn't toggle.
+
+        // ----- Online batteries: popout overlay (closes on outside click) -----
+        $('#btn-toggle-batteries').click(function(e) {
+            e.stopPropagation();
+            var pop = $('#broker-battery-summary');
+            var open = pop.toggleClass('open').hasClass('open');
+            $(this).attr('aria-expanded', open ? 'true' : 'false');
+        });
+        // Don't let clicks inside the popout bubble up to the dismiss handler.
+        $('#broker-battery-summary').on('click', function(e) { e.stopPropagation(); });
+        $(document).on('click', function() {
+            var pop = $('#broker-battery-summary');
+            if (pop.hasClass('open')) {
+                pop.removeClass('open');
+                $('#btn-toggle-batteries').attr('aria-expanded', 'false');
+            }
+        });
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && $('#broker-battery-summary').hasClass('open')) {
+                $('#broker-battery-summary').removeClass('open');
+                $('#btn-toggle-batteries').attr('aria-expanded', 'false');
+            }
         });
 
         // ===== Grid expansion helpers =====
@@ -1772,42 +2623,7 @@
         // 8-digit grid (EEEE NNNN) -> xxxx5yyyy5
         // 10-digit grid is already at 1m precision; returned as-is.
         // Returns null for invalid input.
-        function expandGrid(raw) {
-            if (raw == null) return null;
-            var s = String(raw).replace(/\s+/g, '');
-            if (/^\d{10}$/.test(s)) return s;
-            if (/^\d{8}$/.test(s))  return s.substring(0, 4) + '5' + s.substring(4) + '5';
-            if (/^\d{6}$/.test(s))  return s.substring(0, 3) + '50' + s.substring(3) + '50';
-            return null;
-        }
-        function describeGrid(raw, expanded) {
-            if (!raw) return '';
-            if (raw.length === expanded.length) return raw;
-            return raw + ' → ' + expanded;
-        }
-
-        // Compute a virtual 10-digit target grid from the session spotter
-        // grid plus an azimuth (mils) and distance (m) from spotter to target.
-        // Wraps within the 0..99999 grid range like a 100km MGRS square.
-        function polarToGrid(spotterGridExpanded, azim, dist) {
-            if (!spotterGridExpanded) return null;
-            if (azim == null || dist == null || isNaN(azim) || isNaN(dist)) return null;
-            var sx = parseInt(spotterGridExpanded.substring(0, 5));
-            var sy = parseInt(spotterGridExpanded.substring(5, 10));
-            var polar_rad = (azim - 1600) * -1 * Math.PI / 3200;
-            var dx = dist * Math.cos(polar_rad);
-            var dy = dist * Math.sin(polar_rad);
-            var tx = sx + dx;
-            var ty = sy + dy;
-            function pad5(n) {
-                var i = Math.round(n);
-                i = ((i % 100000) + 100000) % 100000;
-                var s = String(i);
-                while (s.length < 5) s = '0' + s;
-                return s;
-            }
-            return pad5(tx) + pad5(ty);
-        }
+        // Grid math (expand, describe, polar->grid) lives in js/artycalc.js.
 
         // Recompute t.gridExpanded based on the target's current input mode.
         // For polar mode this depends on the session spotter grid + the
@@ -1815,9 +2631,9 @@
         function refreshTargetGrid(t) {
             if (t.firstUuid) return; // grid locked after delivery
             if (t.inputMode === 'polar') {
-                t.gridExpanded = polarToGrid(spotterSelf.gridExpanded, t.targetAzim, t.targetDist);
+                t.gridExpanded = artycal.polarToGrid(spotterSelf.gridExpanded, t.targetAzim, t.targetDist);
             } else {
-                t.gridExpanded = expandGrid(t.gridInputRaw);
+                t.gridExpanded = artycal.expandGrid(t.gridInputRaw);
             }
         }
 
@@ -1832,7 +2648,7 @@
         var artyLastOnlineGrid = null;
         $('#btn-arty-online').click(function() {
             var rawGrid   = $('#arty-grid-input').val().trim();
-            var grid      = expandGrid(rawGrid);
+            var grid      = artycal.expandGrid(rawGrid);
             var alt       = parseFloat($('#arty-alt-input').val());
             var callsign  = $('#arty-callsign-input').val().trim();
             if (!grid) {
@@ -1860,17 +2676,28 @@
             }
             var finalCallsign = artyCallsignLocked || null;
 
-            // If we've previously been online at a different grid, drop the
-            // existing fire-mission list — those solutions were computed for
-            // the old position and don't apply here. Spotters can re-send.
+            // Grid change: archive every non-archived mission untouched. The
+            // artillery client only ever receives a pre-computed solution
+            // (distance/azimuth/altitude) — it doesn't know the target grid
+            // and therefore CANNOT recalculate a moved-battery solution. So
+            // anything from the previous position is stale; we archive it
+            // exactly as received (no history mutations, no field changes,
+            // nothing at all is modified on the mission record itself) so the
+            // Fire Missions pane never displays an invalid solution. The
+            // operator can review the originals in the Archive pane; the
+            // spotter resends to engage from the new position.
             if (artyLastOnlineGrid !== null && artyLastOnlineGrid !== grid) {
-                artilleryMissions = [];
+                artilleryMissions.forEach(function(m) {
+                    if (m.archived) return;
+                    m.archived = true;
+                    m.pendingRemoval = false;
+                });
                 renderMissionsList();
             }
             artyLastOnlineGrid = grid;
             broker.batteryOnline(grid, alt, finalCallsign);
 
-            $('#arty-grid-display').text(describeGrid(rawGrid, grid));
+            $('#arty-grid-display').text(artycal.describeGrid(rawGrid, grid));
             $('#arty-alt-display').text(alt);
             $('#arty-callsign-display').text(finalCallsign ? ('"' + finalCallsign + '"') : '');
             $('#arty-setup-section').hide();
@@ -1882,51 +2709,35 @@
 
         // ----- Stand Down (battery stops accepting fire missions, stays in session) -----
         $('#btn-arty-standdown').click(function() {
+            // Archive every fired mission on stand-down — those targets have
+            // been engaged; standing down marks the cycle complete. Pending
+            // (un-fired) missions stay where they are: if the battery comes
+            // back online at the same grid, the operator can still fire them.
+            artilleryMissions.forEach(function(m) {
+                if (m.fired && !m.archived) {
+                    m.archived = true;
+                    m.pendingRemoval = false;
+                }
+            });
+            renderMissionsList();
             broker.batteryOffline();
             $('#arty-setup-section').show();
             $('#arty-online-section').hide();
         });
 
         // ===== Helpers =====
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, function(c) {
-                return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
-            });
-        }
-        // Derive a stable decimal ID from a UUID for human display only.
-        // XOR-folds the four 32-bit words of the UUID into a single unsigned
-        // 32-bit integer, then formats it as a plain decimal string.
-        // Servers and internal code always use the raw UUID.
-        function uuidToNumericId(uuid) {
-            var hex = uuid.replace(/-/g, '');
-            if (hex.length !== 32) return String(uuid);
-            var a = parseInt(hex.substring(0,  8), 16) >>> 0;
-            var b = parseInt(hex.substring(8,  16), 16) >>> 0;
-            var c = parseInt(hex.substring(16, 24), 16) >>> 0;
-            var d = parseInt(hex.substring(24, 32), 16) >>> 0;
-            var full = ((a ^ b ^ c ^ d) >>> 0).toString();
-            // Zero-pad to at least 4 digits, then take the first 4.
-            while (full.length < 4) full = '0' + full;
-            return full.substring(0, 4);
-        }
-        function batteryLabel(b) {
-            if (!b) return '';
-            if (b.callsign && String(b.callsign).length > 0) {
-                return '"' + escapeHtml(b.callsign) + '" (grid ' + escapeHtml(b.grid) + ', alt ' + escapeHtml(String(b.altitude)) + 'm)';
-            }
-            return 'Grid ' + escapeHtml(b.grid) + ' (alt ' + escapeHtml(String(b.altitude)) + 'm)';
-        }
-        function batteryShort(b) {
-            if (!b) return '';
-            if (b.callsign && String(b.callsign).length > 0) return '"' + b.callsign + '"';
-            return 'Grid ' + b.grid;
-        }
+        // HTML escaping, battery labels, and uuid->numeric-id conversion live
+        // in js/util.js and js/artycalc.js.
 
         // Session-level spotter grid input.
         $('#spotter-self-grid').on('input', function() {
             var raw = $(this).val().trim();
             var prev = spotterSelf.gridExpanded;
-            spotterSelf.gridExpanded = expandGrid(raw);
+            spotterSelf.gridExpanded = artycal.expandGrid(raw);
+
+            // Trigger button reflects whether a valid grid is set (so the user
+            // can see the field is filled even while the input is collapsed).
+            $('#btn-spotter-grid').toggleClass('has-value', !!spotterSelf.gridExpanded);
 
             // When a spotter grid first becomes available, any pre-delivery
             // target that's still in 'grid' mode AND hasn't had any grid
@@ -1959,137 +2770,12 @@
             }
             container.empty();
             brokerBatteries.forEach(function(b) {
-                container.append('<div class="battery-summary">' + batteryLabel(b) + '</div>');
+                container.append('<div class="battery-summary">' + util.batteryLabel(b) + '</div>');
             });
         }
 
         // ===== Spotter: target queue =====
-        // PRESERVED math from the original tools-based broker. Distance is a
-        // 2D grid distance; the slant->horizontal correction using dh is kept
-        // as-is intentionally (do not change without coordinating with the
-        // tools page calculation).
-        function computeFireMission(battery, targetGrid, targetAltitude) {
-            if (!battery || !/^\d{10}$/.test(targetGrid)) return null;
-            var bx = parseInt(battery.grid.substring(0, 5));
-            var by = parseInt(battery.grid.substring(5, 10));
-            var tx = parseInt(targetGrid.substring(0, 5));
-            var ty = parseInt(targetGrid.substring(5, 10));
-            var batteryAlt = battery.altitude || 0;
-            var targAlt = (targetAltitude == null || isNaN(targetAltitude)) ? 0 : targetAltitude;
-            var polar = artycal.cartesianToPolar(bx, by, tx, ty);
-            if (polar.error) return null;
-            var dh = targAlt - batteryAlt;
-            var horizDist = polar.dist;
-            if (horizDist * horizDist - dh * dh > 0) {
-                horizDist = Math.sqrt(horizDist * horizDist - dh * dh);
-            }
-            var roundedDist = Math.round(horizDist);
-            var roundedAzim = Math.round(polar.azim);
-            if (roundedAzim === 6400) roundedAzim = 0;
-            return {
-                distance: horizDist,
-                direction: polar.azim,
-                targetAltitude: targAlt,
-                roundedDist: roundedDist,
-                roundedAzim: roundedAzim,
-                rawDist: Math.round(horizDist * 100) / 100,
-                rawAzim: Math.round(polar.azim * 100) / 100,
-            };
-        }
-
-        // Adjustment math: SHIFT the target by the correction (in spotter's
-        // frame), then run the same battery->target calculation as the
-        // unadjusted fire mission. Math intentionally identical to the initial
-        // path; only the target coordinate is shifted.
-        function resolveSpotterAzimToTarget(t) {
-            // Per-target manual override (the spotter's compass reading).
-            if (t.spotterAzimOverride != null && !isNaN(t.spotterAzimOverride)) {
-                return t.spotterAzimOverride;
-            }
-            // Compute from session spotter grid -> target grid when both are available.
-            if (spotterSelf.gridExpanded && t.gridExpanded) {
-                var sx = parseInt(spotterSelf.gridExpanded.substring(0, 5));
-                var sy = parseInt(spotterSelf.gridExpanded.substring(5, 10));
-                var tx = parseInt(t.gridExpanded.substring(0, 5));
-                var ty = parseInt(t.gridExpanded.substring(5, 10));
-                var polar = artycal.cartesianToPolar(sx, sy, tx, ty);
-                if (polar && !polar.error) return polar.azim;
-            }
-            // When the target was identified via polar (Az+Dist) input, that
-            // azimuth IS the direct spotter-to-target bearing — use it as the
-            // final fallback so adjustments still work without a session grid.
-            if (t.targetAzim != null && !isNaN(t.targetAzim)) {
-                return t.targetAzim;
-            }
-            return null;
-        }
-
-        function computeAdjustedSolution(battery, t) {
-            var spotterAzim = resolveSpotterAzimToTarget(t);
-            if (spotterAzim == null) return null;
-
-            var corrX = (t.adjLR == null || isNaN(t.adjLR)) ? 0 : t.adjLR;
-            var corrY = (t.adjSA == null || isNaN(t.adjSA)) ? 0 : t.adjSA;
-            if (corrX === 0 && corrY === 0) return null;
-
-            var corr = artycal.cartesianToPolar(0, 0, corrX, corrY);
-            if (corr.error) return null;
-            // Rotate correction into spotter->target frame (tools-section logic).
-            corr.azim = spotterAzim + corr.azim;
-            if (corr.azim > 6400) corr.azim -= 6400;
-            if (corr.azim < 0) corr.azim += 6400;
-            // Polar -> cartesian using artycal's convention (azim 0 = +y).
-            var polar_rad = (corr.azim - 1600) * -1 * Math.PI / 3200;
-            var dx = corr.dist * Math.cos(polar_rad);
-            var dy = corr.dist * Math.sin(polar_rad);
-
-            var targAlt = (t.altitude == null || isNaN(t.altitude)) ? 0 : t.altitude;
-
-            // Primary path: use absolute grid coordinates (most accurate, requires
-            // both the target grid and the battery to still be online).
-            if (t.gridExpanded && battery) {
-                var tx = parseInt(t.gridExpanded.substring(0, 5));
-                var ty = parseInt(t.gridExpanded.substring(5, 10));
-                var bx = parseInt(battery.grid.substring(0, 5));
-                var by = parseInt(battery.grid.substring(5, 10));
-                var batteryAlt = battery.altitude || 0;
-                var polar = artycal.cartesianToPolar(bx, by, tx + dx, ty + dy);
-                if (polar.error) return null;
-                var dh = targAlt - batteryAlt;
-                var horizDist = polar.dist;
-                if (horizDist * horizDist - dh * dh > 0) horizDist = Math.sqrt(horizDist * horizDist - dh * dh);
-                return {
-                    distance: horizDist, direction: polar.azim, targetAltitude: targAlt,
-                    roundedDist: Math.round(horizDist),
-                    roundedAzim: ((Math.round(polar.azim) === 6400) ? 0 : Math.round(polar.azim)),
-                    rawDist: Math.round(horizDist * 100) / 100,
-                    rawAzim: Math.round(polar.azim * 100) / 100,
-                };
-            }
-
-            // Fallback: derive from the last delivered solution (no grid or battery
-            // needed). Works when the battery is temporarily offline or the target
-            // was identified by Az+Dist without a session spotter grid.
-            var latest = null;
-            for (var i = t.history.length - 1; i >= 0; i--) {
-                if (t.history[i].deliveredAt && t.history[i].computed) { latest = t.history[i].computed; break; }
-            }
-            if (!latest) return null;
-            // Convert last solution to battery-relative cartesian, apply the
-            // correction shift, then re-polarize back to battery.
-            var lastAzRad = (latest.direction - 1600) * -1 * Math.PI / 3200;
-            var relTx = latest.distance * Math.cos(lastAzRad);
-            var relTy = latest.distance * Math.sin(lastAzRad);
-            var polar2 = artycal.cartesianToPolar(0, 0, relTx + dx, relTy + dy);
-            if (polar2.error) return null;
-            return {
-                distance: polar2.dist, direction: polar2.azim, targetAltitude: targAlt,
-                roundedDist: Math.round(polar2.dist),
-                roundedAzim: ((Math.round(polar2.azim) === 6400) ? 0 : Math.round(polar2.azim)),
-                rawDist: Math.round(polar2.dist * 100) / 100,
-                rawAzim: Math.round(polar2.azim * 100) / 100,
-            };
-        }
+        // Fire-mission math (initial + adjustment) lives in js/artycalc.js.
 
         function formatSolution(s) {
             if (!s) return '<span class="text-muted-themed">No solution yet.</span>';
@@ -2105,7 +2791,7 @@
                 var label = (b.callsign && b.callsign.length > 0)
                     ? ('"' + b.callsign + '" — grid ' + b.grid)
                     : ('Grid ' + b.grid);
-                opts += '<option value="' + escapeHtml(b.id) + '"' + sel + '>' + escapeHtml(label) + ' (alt ' + escapeHtml(String(b.altitude)) + 'm)</option>';
+                opts += '<option value="' + util.escapeHtml(b.id) + '"' + sel + '>' + util.escapeHtml(label) + ' (alt ' + util.escapeHtml(String(b.altitude)) + 'm)</option>';
             });
             return opts;
         }
@@ -2114,20 +2800,35 @@
 
         // ===== Spotter: render target list =====
         function renderSpotterTargets() {
-            var container = $('#spotter-targets-container');
-            var delivered = spotterTargets.filter(function(t) { return t.firstUuid; }).length;
-            var queued = spotterTargets.length - delivered;
-            $('#spotter-stats').text(spotterTargets.length === 0 ? '' : (queued + ' queued · ' + delivered + ' delivered'));
+            // Split by archive state so each pane only sees the targets it cares about.
+            var active   = spotterTargets.filter(function(t) { return !t.archived; });
+            var archived = spotterTargets.filter(function(t) { return  t.archived; });
 
-            if (spotterTargets.length === 0) {
-                container.html('<p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>');
-                return;
+            // Per-pane tab counts (always visible regardless of which pane is selected).
+            $('#spotter-queue-count').text(active.length   ? '(' + active.length   + ')' : '');
+            $('#spotter-archive-count').text(archived.length ? '(' + archived.length + ')' : '');
+
+            // Render the active pane.
+            var queueEl   = $('#spotter-targets-container');
+            var archiveEl = $('#spotter-archive-container');
+            queueEl.empty();
+            archiveEl.empty();
+            if (active.length === 0) {
+                queueEl.html('<p class="text-muted-themed">Click <strong>+ Add Target</strong> to begin queuing fire missions.</p>');
+            } else {
+                active.forEach(function(t) {
+                    queueEl.append(buildTargetRowHtml(t));
+                    updateTargetRow(t.id);
+                });
             }
-            container.empty();
-            spotterTargets.forEach(function(t) {
-                container.append(buildTargetRowHtml(t));
-                updateTargetRow(t.id);
-            });
+            if (archived.length === 0) {
+                archiveEl.html('<p class="text-muted-themed">No archived fire missions.</p>');
+            } else {
+                archived.forEach(function(t) {
+                    archiveEl.append(buildTargetRowHtml(t));
+                    updateTargetRow(t.id);
+                });
+            }
         }
 
         function buildTargetRowHtml(t) {
@@ -2137,143 +2838,164 @@
             // ----- Header tags (FM ID, info bullets post-delivery, status) -----
             var headerTags = '';
             if (t.fireMissionId) {
-                headerTags += ' <span class="fm-id-badge" title="Fire Mission ID (human-readable; servers use the UUID)">ID: ' + escapeHtml(t.fireMissionId) + '</span>';
+                headerTags += ' <span class="fm-id-badge" title="Fire Mission ID (human-readable; servers use the UUID)">ID: ' + util.escapeHtml(t.fireMissionId) + '</span>';
             }
             if (locked) {
                 if (t.gridExpanded) {
-                    headerTags += ' <span class="info-pill" title="Target grid">Grid: ' + escapeHtml(t.gridExpanded) + '</span>';
+                    headerTags += ' <span class="info-pill" title="Target grid">Grid: ' + util.escapeHtml(t.gridExpanded) + '</span>';
                 }
                 var altDisp = (t.altitude == null || isNaN(t.altitude)) ? 0 : (Math.round(t.altitude * 100) / 100);
-                headerTags += ' <span class="info-pill" title="Target altitude">Alt: ' + escapeHtml(String(altDisp)) + 'm</span>';
+                headerTags += ' <span class="info-pill" title="Target altitude">Alt: ' + util.escapeHtml(String(altDisp)) + 'm</span>';
                 var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
                 if (battery) {
                     var btyName = (battery.callsign && battery.callsign.length > 0)
                         ? ('"' + battery.callsign + '"')
                         : ('Grid ' + battery.grid);
-                    headerTags += ' <span class="info-pill" title="Battery">Bty: ' + escapeHtml(btyName) + '</span>';
+                    headerTags += ' <span class="info-pill" title="Battery">Bty: ' + util.escapeHtml(btyName) + '</span>';
                 }
             }
 
-            // ----- Target input region (only pre-delivery) -----
-            // Three modes:
-            //   - grid mode: Grid + Altitude    (col-md-8 + col-md-4)
-            //   - polar mode: Az + Dist + Altitude (col-md-4 + col-md-4 + col-md-4)
-            // The "Grid" prepend acts as a clickable toggle when a spotter grid
-            // is available, swapping the input(s) shown.
+            // ----- Target inputs (only pre-delivery). Bootstrap row/col grid
+            // using col-md-* so they stay inline at 768px+ and stack vertically
+            // up to 767px (the 577–767px range was wrapping labels inside the
+            // input-groups when shoved into narrow columns — stacking gives
+            // each input its full row width).
+            //
+            //   Grid mode  → Grid (col-md-5) + Alt (col-md-3) + Battery (col-md-4)
+            //   Polar mode → Az (col-md-3) + Dist (col-md-3) + Alt (col-md-2) + Battery (col-md-4)
+            //
+            // Labels are kept tight (Az / Dist / Alt / Bty) so the input itself
+            // has room for its full data without clipping when inline.
             var inputsSection = '';
             if (!locked) {
                 var canPolar = !!spotterSelf.gridExpanded;
                 var inPolar  = (t.inputMode === 'polar') && canPolar;
                 var togglePolarTitle = 'Switch to Az/Dist mode';
                 var toggleGridTitle  = 'Switch to Grid mode';
+                var batteryCol =
+                    '<div class="col-md-4">' +
+                        '<div class="input-group input-group-sm mb-1">' +
+                            '<div class="input-group-prepend"><span class="input-group-text">Bty</span></div>' +
+                            '<select class="form-control target-battery">' + buildBatteryOptions(t) + '</select>' +
+                        '</div>' +
+                    '</div>';
 
                 if (inPolar) {
-                    inputsSection = (
-                        '<div class="row target-inputs">' +
-                            '<div class="col-md-4">' +
+                    inputsSection =
+                        '<div class="row target-inputs no-gutters mx-0">' +
+                            '<div class="col-md-3 pr-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
                                     '<div class="input-group-prepend">' +
                                         '<button class="btn btn-outline-secondary input-mode-toggle" type="button" title="' + toggleGridTitle + '">Az <i class="fa-solid fa-right-left"></i></button>' +
                                     '</div>' +
-                                    '<input type="number" class="form-control target-azim" placeholder="from spotter (mils)" value="' + (t.targetAzim == null ? '' : escapeHtml(String(t.targetAzim))) + '">' +
+                                    '<input type="number" inputmode="decimal" maxlength="4" class="form-control target-azim" placeholder="mils" value="' + (t.targetAzim == null ? '' : util.escapeHtml(String(t.targetAzim))) + '">' +
                                     '<div class="input-group-append"><span class="input-group-text">mil</span></div>' +
                                 '</div>' +
                             '</div>' +
-                            '<div class="col-md-4">' +
+                            '<div class="col-md-3 px-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
-                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Dist</span></div>' +
-                                    '<input type="number" class="form-control target-dist" placeholder="from spotter (m)" value="' + (t.targetDist == null ? '' : escapeHtml(String(t.targetDist))) + '">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Dist</span></div>' +
+                                    '<input type="number" inputmode="decimal" class="form-control target-dist" placeholder="m" value="' + (t.targetDist == null ? '' : util.escapeHtml(String(t.targetDist))) + '">' +
                                     '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
                                 '</div>' +
                             '</div>' +
-                            '<div class="col-md-4">' +
+                            '<div class="col-md-2 px-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
-                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Alt</span></div>' +
-                                    '<input type="number" class="form-control target-alt" placeholder="Target altitude" value="' + (t.altitude == null ? '' : escapeHtml(String(t.altitude))) + '">' +
-                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Alt</span></div>' +
+                                    '<input type="number" inputmode="decimal" maxlength="4" class="form-control target-alt" placeholder="m" value="' + (t.altitude == null ? '' : util.escapeHtml(String(t.altitude))) + '">' +
                                 '</div>' +
                             '</div>' +
-                        '</div>'
-                    );
+                            batteryCol +
+                        '</div>';
                 } else {
-                    // Grid mode. Toggle button shown only when canPolar.
-                    var prepend = canPolar
+                    var gridPrepend = canPolar
                         ? '<button class="btn btn-outline-secondary input-mode-toggle" type="button" title="' + togglePolarTitle + '">Grid <i class="fa-solid fa-right-left"></i></button>'
-                        : '<span class="input-group-text" style="width:5em">Grid</span>';
-                    inputsSection = (
-                        '<div class="row target-inputs">' +
-                            '<div class="col-md-8">' +
+                        : '<span class="input-group-text">Grid</span>';
+                    inputsSection =
+                        '<div class="row target-inputs no-gutters mx-0">' +
+                            '<div class="col-md-5 pr-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
-                                    '<div class="input-group-prepend">' + prepend + '</div>' +
-                                    '<input type="text" class="form-control target-grid" maxlength="10" placeholder="6, 8, or 10-digit grid" value="' + escapeHtml(t.gridInputRaw || '') + '">' +
+                                    '<div class="input-group-prepend">' + gridPrepend + '</div>' +
+                                    '<input type="text" inputmode="numeric" maxlength="10" class="form-control target-grid" placeholder="6, 8, or 10-digit grid" value="' + util.escapeHtml(t.gridInputRaw || '') + '">' +
                                 '</div>' +
                             '</div>' +
-                            '<div class="col-md-4">' +
+                            '<div class="col-md-3 px-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
-                                    '<div class="input-group-prepend"><span class="input-group-text" style="width:4em">Alt</span></div>' +
-                                    '<input type="number" class="form-control target-alt" placeholder="Target altitude" value="' + (t.altitude == null ? '' : escapeHtml(String(t.altitude))) + '">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Alt</span></div>' +
+                                    '<input type="number" inputmode="decimal" maxlength="4" class="form-control target-alt" placeholder="m" value="' + (t.altitude == null ? '' : util.escapeHtml(String(t.altitude))) + '">' +
                                     '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
                                 '</div>' +
                             '</div>' +
-                        '</div>'
-                    );
+                            batteryCol +
+                        '</div>';
                 }
             }
 
-            // ----- Battery selector (only pre-delivery; post-delivery it's an info pill) -----
-            var batterySection = locked
-                ? ''
-                : ('<div class="input-group input-group-sm mb-1">' +
-                        '<div class="input-group-prepend"><span class="input-group-text" style="width:5em">Battery</span></div>' +
-                        '<select class="form-control target-battery">' + buildBatteryOptions(t) + '</select>' +
-                    '</div>');
+            // Battery is now part of the inputs row (pre-delivery) — no
+            // separate section needed. Post-delivery it shows as an info pill
+            // in the row head.
+            var batterySection = '';
 
-            // ----- Adjustment section (only post-delivery, collapsed by default) -----
-            // Hidden entirely when the battery has moved off-station — the
-            // section reappears (with prior inputs intact) if the battery
-            // returns to its original grid.
+            // ----- Inline adjustment row (post-delivery only). Same Bootstrap
+            // row/col structure as the target inputs above so the layout reads
+            // consistently. Hidden until t.adjustOpen via the .adjust-inline
+            // toggle in updateTargetRow.
             var adjSection = '';
-            if (locked && !isBatteryGone(t)) {
+            if (locked) {
                 var adjUsed = t.adjustmentsDelivered || 0;
-                var adjAllowed = adjUsed < 3;
-                var summaryText = adjAllowed
-                    ? ('Make Adjustment — ' + (adjUsed + 1) + ' of 3 available')
-                    : ('Adjustments exhausted (' + adjUsed + ' of 3 used)');
-                adjSection = (
-                    '<details class="adjustment-section' + (adjAllowed ? '' : ' disabled') + '">' +
-                        '<summary>' + escapeHtml(summaryText) + '</summary>' +
-                        '<div class="adjustment-section-body" style="padding-top:6px">' +
-                            '<div class="row">' +
-                                '<div class="col-md-6">' +
-                                    '<div class="input-group input-group-sm mb-1">' +
-                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Az→Target</span></div>' +
-                                        '<input type="number" class="form-control target-spotter-azim" placeholder="Override (mils)" value="' + (t.spotterAzimOverride == null ? '' : escapeHtml(String(t.spotterAzimOverride))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
-                                        '<div class="input-group-append"><span class="input-group-text">mil</span></div>' +
-                                    '</div>' +
+                var adjAllowedShape = adjUsed < 3;
+                adjSection =
+                    '<div class="adjust-inline">' +
+                        '<p class="adjust-inline-meta">Adjustment ' + (adjUsed + 1) + ' of 3 — values are spotter-frame metres (negative = left / short)' + (adjAllowedShape ? '' : ' — exhausted') + '</p>' +
+                        '<div class="row target-inputs no-gutters mx-0">' +
+                            '<div class="col-md-4 pr-md-1">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Az→Tgt</span></div>' +
+                                    '<input type="number" inputmode="numeric" maxlength="4" class="form-control target-spotter-azim" placeholder="mils" value="' + (t.spotterAzimOverride == null ? '' : util.escapeHtml(String(t.spotterAzimOverride))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">mil</span></div>' +
                                 '</div>' +
                             '</div>' +
-                            '<div class="row">' +
-                                '<div class="col-md-6">' +
-                                    '<div class="input-group input-group-sm mb-1">' +
-                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Left/Right</span></div>' +
-                                        '<input type="number" class="form-control target-adj-lr" placeholder="neg = left" value="' + (t.adjLR == null ? '' : escapeHtml(String(t.adjLR))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
-                                        '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
-                                    '</div>' +
-                                '</div>' +
-                                '<div class="col-md-6">' +
-                                    '<div class="input-group input-group-sm mb-1">' +
-                                        '<div class="input-group-prepend"><span class="input-group-text" style="width:7em">Short/Add</span></div>' +
-                                        '<input type="number" class="form-control target-adj-sa" placeholder="neg = short" value="' + (t.adjSA == null ? '' : escapeHtml(String(t.adjSA))) + '"' + (adjAllowed ? '' : ' disabled') + '>' +
-                                        '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
-                                    '</div>' +
+                            '<div class="col-md-4 px-md-1">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Left/Right</span></div>' +
+                                    '<input type="number" inputmode="numeric" maxlength="4" class="form-control target-adj-lr" placeholder="left = neg" value="' + (t.adjLR == null ? '' : util.escapeHtml(String(t.adjLR))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
                                 '</div>' +
                             '</div>' +
-                            '<button class="btn btn-sm btn-outline-info btn-target-adjust"' + (adjAllowed ? '' : ' disabled') + '>' +
-                                '<span class="btn-icon"><i class="fa-solid fa-check"></i></span><span class="btn-text">Send Adjustment</span>' +
-                            '</button>' +
+                            '<div class="col-md-4 px-md-1">' +
+                                '<div class="input-group input-group-sm mb-1">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Short/Wide</span></div>' +
+                                    '<input type="number" inputmode="numeric" maxlength="4" class="form-control target-adj-sa" placeholder="short = neg" value="' + (t.adjSA == null ? '' : util.escapeHtml(String(t.adjSA))) + '">' +
+                                    '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
+                                '</div>' +
+                            '</div>' +
                         '</div>' +
-                    '</details>'
-                );
+                    '</div>';
+            }
+
+            // ----- Overflow menu items: built per-row based on state. Items
+            // visible: Resend (post-send), Copy (always), Archive (post-send,
+            // unarchived), Unarchive (archived), Remove (pre-send), Delete
+            // (archived, 2-click confirm). -----
+            var menuItems = '';
+            if (!t.archived && t.firstUuid) {
+                menuItems += '<button type="button" class="menu-resend" ' + (t.sendInFlight || batteryOfflineQuick(t) ? 'disabled' : '') + '><span class="menu-icon"><i class="fa-solid fa-paper-plane"></i></span>Resend</button>';
+            }
+            menuItems += '<button type="button" class="menu-copy"><span class="menu-icon"><i class="fa-solid fa-clone"></i></span>Copy</button>';
+            if (!t.archived && t.firstUuid) {
+                menuItems += '<button type="button" class="menu-archive"><span class="menu-icon"><i class="fa-solid fa-box-archive"></i></span>Archive</button>';
+            }
+            if (t.archived) {
+                menuItems += '<button type="button" class="menu-unarchive"><span class="menu-icon"><i class="fa-solid fa-box-open"></i></span>Unarchive</button>';
+            }
+            if (!t.archived && !t.firstUuid) {
+                menuItems += '<hr><button type="button" class="menu-remove danger" ' + (t.sendInFlight ? 'disabled' : '') + '><span class="menu-icon"><i class="fa-solid fa-xmark"></i></span>Remove</button>';
+            }
+            if (t.archived) {
+                // No double-tap confirm: the action is already inside a popout
+                // that needs a deliberate open, so a single click is enough.
+                menuItems += '<hr><button type="button" class="menu-delete danger">' +
+                    '<span class="menu-icon"><i class="fa-solid fa-trash"></i></span>Delete</button>';
             }
 
             return (
@@ -2281,14 +3003,23 @@
                     '<div class="row-head">' +
                         '<div class="row-head-main">' +
                             '<span class="target-label-wrap">' +
-                                '<span class="target-label-display" title="Click to rename (spotter-only, not sent to artillery)">' + escapeHtml(label) + '</span>' +
+                                '<span class="target-label-display" title="Click to rename (spotter-only, not sent to artillery)">' + util.escapeHtml(label) + '</span>' +
                             '</span>' +
                             headerTags +
                             '<span class="target-status pill"></span>' +
+                            '<span class="battery-state pill" style="display:none"></span>' +
                         '</div>' +
                         '<div class="row-head-actions">' +
-                            (locked ? '' : '<button class="btn btn-sm btn-outline-primary btn-target-send" title="Send fire mission"><span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Send</span></button>') +
-                            '<button class="btn btn-sm btn-outline-danger btn-target-remove" title="Remove target" aria-label="Remove"><span class="btn-icon"><i class="fa-solid fa-trash"></i></span><span class="btn-text">Remove</span></button>' +
+                            // Secondary Send button — only shown while the
+                            // adjust panel is open AND the typed values resolve
+                            // to a valid solution. "Pops out" to the left of
+                            // the Cancel/Adjust button.
+                            '<button class="btn btn-sm btn-outline-primary btn-target-send-adjust" type="button" style="display:none"><span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Send</span></button>' +
+                            '<button class="btn btn-sm btn-outline-primary btn-target-send" type="button" data-mode="send-initial" style="display:none"><span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Send</span></button>' +
+                            '<div class="overflow-menu">' +
+                                '<button type="button" class="overflow-menu-btn btn btn-sm btn-outline-secondary" aria-haspopup="true" aria-label="More actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>' +
+                                '<div class="overflow-menu-list">' + menuItems + '</div>' +
+                            '</div>' +
                         '</div>' +
                     '</div>' +
 
@@ -2308,38 +3039,47 @@
             );
         }
 
+        // Quick "is battery in local list?" used by the row template build.
+        function batteryOfflineQuick(t) {
+            if (!t.batteryId) return false;
+            return !brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+        }
+
         function updateTargetRow(id) {
             var t = spotterTargets.find(function(x) { return x.id === id; });
             if (!t) return;
             var rowEl = $('.target-row[data-id="' + id + '"]');
             if (rowEl.length === 0) return;
 
-            // Compute battery state once — drives card tint, status pill, and
-            // whether adjustment inputs/button are usable.
-            var batteryGone = isBatteryGone(t);
+            // Battery-state derived flag. batteryOffline = bound battery is
+            // missing from our local list. (Relocation is now handled silently
+            // by reconcileBatteryState — no special UI state.)
+            var batteryOffline = isBatteryOffline(t);
 
             // Compute "staged adjustment" presence up-front so both the card
             // tint and status pill can react to it. A staged adjustment is a
             // post-delivery row where the user has typed L/R or S/A values that
-            // resolve to a computable solution. Only error states override it.
+            // resolve to a computable solution.
             var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
-            var initialSol = computeFireMission(battery, t.gridExpanded, t.altitude);
-            var adjustedSol = t.firstUuid ? computeAdjustedSolution(battery, t) : null;
-            var hasStagedAdjustment = !!t.firstUuid && !batteryGone && !!adjustedSol;
+            var initialSol = artycal.computeFireMission(battery, t.gridExpanded, t.altitude);
+            var adjustedSol = t.firstUuid ? artycal.computeAdjustedSolution(battery, t, spotterSelf.gridExpanded) : null;
+            var hasStagedAdjustment = !!t.firstUuid && !!adjustedSol && !batteryOffline;
 
-            // Row tint mirrors the status pill (see below).
-            rowEl.removeClass('is-sent is-queued is-pending is-failed is-gone is-delivered is-changing');
+            // Row tint mirrors the status pill (see below). Battery-state
+            // (offline / relocated) intentionally does NOT change the card tint
+            // — it's surfaced via the additive battery-state pill instead.
+            rowEl.removeClass('is-sent is-queued is-pending is-failed is-delivered is-changing is-resend');
             if (t.sendInFlight) {
                 rowEl.addClass('is-sent');
             } else if (t.errorMessage) {
                 rowEl.addClass('is-failed');
-            } else if (batteryGone) {
-                rowEl.addClass('is-gone');
+            } else if (t.needsResend) {
+                rowEl.addClass('is-resend');
             } else if (hasStagedAdjustment) {
                 rowEl.addClass('is-changing');
             } else if (t.firstUuid) {
-                var lastHist = t.history.length > 0 ? t.history[t.history.length - 1] : null;
-                if (lastHist && lastHist.deliveredAt) rowEl.addClass('is-delivered');
+                var lastSolution = lastSolutionEntry(t);
+                if (lastSolution && lastSolution.deliveredAt) rowEl.addClass('is-delivered');
                 else rowEl.addClass('is-sent');
             } else if (t.batteryId && t.gridExpanded) {
                 rowEl.addClass('is-queued');
@@ -2347,32 +3087,29 @@
                 rowEl.addClass('is-pending');
             }
 
-            var statusEl = rowEl.find('.target-status');
-            var sendBtn  = rowEl.find('.btn-target-send');
-            var solEl    = rowEl.find('.target-solution');
-            var histBody = rowEl.find('.history-body');
-            var histCt   = rowEl.find('.history-count');
-            var adjBtn   = rowEl.find('.btn-target-adjust');
+            var statusEl    = rowEl.find('.target-status');
+            var bStateEl    = rowEl.find('.battery-state');
+            var sendBtn     = rowEl.find('.btn-target-send');
+            var solEl       = rowEl.find('.target-solution');
+            var histBody    = rowEl.find('.history-body');
+            var histCt      = rowEl.find('.history-count');
 
-            // Status pill
-            statusEl.removeClass('pill-queued pill-sent pill-delivered pill-pending pill-failed pill-gone');
+            // Main status pill (mission state).
+            statusEl.removeClass('pill-queued pill-sent pill-delivered pill-pending pill-failed pill-resend');
             if (t.sendInFlight) {
                 statusEl.addClass('pill-sent').text('Sending…');
                 sendBtn.prop('disabled', true);
             } else if (t.errorMessage) {
-                // Hold the failed state visible while the error banner is shown
-                // so the status doesn't silently revert to "Delivered" (the prior
-                // successful entry) and falsely suggest the last attempt succeeded.
                 statusEl.addClass('pill-failed').text('Delivery failed');
-            } else if (batteryGone) {
-                statusEl.addClass('pill-gone').text('Battery gone');
+            } else if (t.needsResend) {
+                // Battery returned from offline — concise status word that
+                // tells the spotter the displayed solution is no longer fresh.
+                statusEl.addClass('pill-resend').text('Stale');
             } else if (hasStagedAdjustment) {
-                // User has staged a new adjustment — show this instead of the
-                // prior entry's "Delivered" so it's clear there's an unsent change.
                 statusEl.addClass('pill-pending').text('Changing');
             } else if (t.firstUuid) {
-                var latestEntry = t.history.length > 0 ? t.history[t.history.length - 1] : null;
-                if (latestEntry && latestEntry.deliveredAt) {
+                var latestSolution = lastSolutionEntry(t);
+                if (latestSolution && latestSolution.deliveredAt) {
                     statusEl.addClass('pill-delivered').text('Delivered');
                 } else {
                     statusEl.addClass('pill-sent').text('Sent');
@@ -2383,99 +3120,182 @@
                 statusEl.text('');
             }
 
-            // Error / state banner.
-            // "Battery gone" is persistent (no dismiss) and supersedes any
-            // transient error since it's a stable state the user must wait out.
+            // Additive battery-state pill (independent of the status pill).
+            // "Out of contact" surfaces when the battery isn't in the local
+            // list at all — useful so the spotter knows attempts will fail.
+            bStateEl.removeClass('pill-offline').hide().text('');
+            if (batteryOffline) {
+                bStateEl.addClass('pill-offline').text('Out of contact').show();
+            }
+
+            // Error banner (transient; "Battery gone" branch is gone).
             var errEl = rowEl.find('.target-error-bar-container');
-            if (batteryGone) {
-                errEl.html(
-                    '<div class="target-error-bar">' +
-                        '<strong>Battery gone.</strong> The artillery client is no longer at grid ' +
-                        escapeHtml(t.batteryGrid) +
-                        '. Adjustments are disabled until it returns to its original position.' +
-                    '</div>'
-                );
-            } else if (t.errorMessage) {
+            if (t.errorMessage) {
                 errEl.html(
                     '<div class="target-error-bar">' +
                         '<button class="err-dismiss" type="button" aria-label="Dismiss">&times;</button>' +
-                        escapeHtml(t.errorMessage) +
+                        util.escapeHtml(t.errorMessage) +
                     '</div>'
                 );
             } else {
                 errEl.empty();
             }
 
-            // Latest delivered solution (from the history).
+            // Latest *delivered* fire-solution from history (skipping
+            // non-solution lifecycle events (battery_offline / battery_online).
             var latest = null;
-            for (var i = t.history.length - 1; i >= 0; i--) {
-                if (t.history[i].deliveredAt && t.history[i].computed) {
-                    latest = t.history[i].computed;
+            for (var li = t.history.length - 1; li >= 0; li--) {
+                var lh = t.history[li];
+                if ((lh.kind === 'initial' || lh.kind === 'adjustment')
+                    && lh.deliveredAt && lh.computed) {
+                    latest = lh.computed;
                     break;
                 }
             }
 
-            // Render solution panel.
+            // Render solution panel. Only ONE solution line at a time: a
+            // staged adjustment (when present) replaces the prior delivered
+            // solution. No DELIVERED/STAGED/PREVIEW bullet — the status pill
+            // in the row head already conveys that information, and the row's
+            // tinted border colour reinforces it.
             var html = '';
             if (t.firstUuid) {
-                // Delivered path: show latest delivered + optional staged adjustment.
-                if (latest) {
-                    html += '<div class="solution-line"><span class="pill pill-delivered">DELIVERED</span>' + formatSolution(latest) + '</div>';
+                if (adjustedSol) {
+                    html += '<div class="solution-line">' + formatSolution(adjustedSol) + '</div>';
+                } else if (latest) {
+                    html += '<div class="solution-line">' + formatSolution(latest) + '</div>';
                 }
-                if (!batteryGone) {
-                    if (adjustedSol) {
-                        html += '<div class="solution-line"><span class="pill pill-pending">STAGED ADJUSTMENT</span>' + formatSolution(adjustedSol) + '</div>';
-                    } else if ((t.adjLR != null || t.adjSA != null) && (t.adjLR !== 0 || t.adjSA !== 0)) {
-                        // User has entered a correction but we can't compute it.
-                        html += '<div style="font-size:12px; color:#dc3545; margin-top:4px">Cannot compute adjustment: set the Spotter Grid above, or enter <em>Az→Target</em> for this row.</div>';
-                    }
+                if (!adjustedSol && t.adjustOpen &&
+                    (t.adjLR != null || t.adjSA != null) && (t.adjLR !== 0 || t.adjSA !== 0)) {
+                    html += '<div style="font-size:12px; color:#dc3545; margin-top:4px">Cannot compute adjustment: set the Spotter Grid above, or enter <em>Az→Target</em> for this row.</div>';
                 }
             } else {
-                // Pre-delivery: show preview of initial fire mission if we have everything.
                 if (initialSol) {
-                    html += '<div class="solution-line"><span class="pill pill-queued">PREVIEW</span>' + formatSolution(initialSol) + '</div>';
+                    html += '<div class="solution-line">' + formatSolution(initialSol) + '</div>';
                 } else {
                     html = '<span class="text-muted-themed">Enter a 6/8/10-digit grid and select a battery to compute.</span>';
                 }
             }
             solEl.html(html);
 
-            // Send button: visible only pre-delivery.
-            if (t.firstUuid) {
+            // Primary action button cycles Send ↔ Adjust ↔ Send:
+            //   pre-send                              → primary "Send" only
+            //   post-send, NEEDS RESEND               → primary "Resend" (purple)
+            //   post-send, adjust closed              → primary "Adjust"
+            //   post-send, adjust open  (no valid)    → primary "Cancel" only
+            //   post-send, adjust open  (valid)       → secondary "Send" + primary "Cancel"
+            // Send and Cancel use btn-outline-primary; the row-level
+            // .is-resend class repaints the button purple when needed.
+            var sendAdjBtn      = rowEl.find('.btn-target-send-adjust');
+            var adjLeft         = 3 - (t.adjustmentsDelivered || 0);
+            var canSendInitial  = !t.firstUuid && t.batteryId && t.gridExpanded && !batteryOffline;
+            var canSendAdjust   = !!t.firstUuid && adjLeft > 0 && !batteryOffline && !!adjustedSol;
+
+            if (t.archived) {
                 sendBtn.hide();
+                sendAdjBtn.hide();
+            } else if (t.needsResend) {
+                // Battery returned from offline → the row is effectively
+                // pre-send again. Resend replaces Adjust as the primary action;
+                // adjustment panel + secondary Send are both suppressed until
+                // the row is back to normal.
+                sendBtn.show()
+                    .attr('data-mode', 'resend')
+                    .html('<span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Resend</span>')
+                    .prop('disabled', t.sendInFlight || batteryOffline);
+                sendAdjBtn.hide();
+            } else if (!t.firstUuid) {
+                // Pre-send: just the Send button.
+                sendBtn.show()
+                    .attr('data-mode', 'send-initial')
+                    .html('<span class="btn-icon"><i class="fa-solid fa-paper-plane"></i></span><span class="btn-text">Send</span>')
+                    .prop('disabled', t.sendInFlight || !canSendInitial);
+                sendAdjBtn.hide();
+            } else if (t.adjustOpen) {
+                // Adjust panel open: primary becomes Cancel; Send pops out
+                // beside it whenever the staged adjustment is valid.
+                sendBtn.show()
+                    .attr('data-mode', 'cancel-adjust')
+                    .html('<span class="btn-icon"><i class="fa-solid fa-xmark"></i></span><span class="btn-text">Cancel</span>')
+                    .prop('disabled', t.sendInFlight);
+                if (adjustedSol) {
+                    sendAdjBtn.show().prop('disabled', t.sendInFlight || !canSendAdjust);
+                } else {
+                    sendAdjBtn.hide();
+                }
             } else {
-                sendBtn.show().text('Send').prop('disabled', t.sendInFlight || !t.batteryId || !t.gridExpanded);
+                // Post-send, panel closed: Adjust toggle.
+                sendBtn.show()
+                    .attr('data-mode', 'toggle-adjust')
+                    .html('<span class="btn-icon"><i class="fa-solid fa-sliders"></i></span><span class="btn-text">Adjust</span>')
+                    .prop('disabled', t.sendInFlight || adjLeft <= 0 || batteryOffline);
+                sendAdjBtn.hide();
             }
 
-            // Adjust button + input enabled criteria (re-evaluated each render
-            // so a moved/returned battery flips inputs live).
-            var adjLeft = 3 - (t.adjustmentsDelivered || 0);
-            var adjAllowed = !!t.firstUuid && adjLeft > 0 && !batteryGone;
-            var canAdjust = adjAllowed && !t.sendInFlight && !!adjustedSol;
-            adjBtn.prop('disabled', !canAdjust);
+            // Adjustment input row visibility — only when the user has clicked
+            // Adjust (t.adjustOpen). Always disabled for archived/exhausted.
+            var adjAllowed = !!t.firstUuid && adjLeft > 0 && !batteryOffline && !t.archived;
+            rowEl.find('.adjust-inline').toggle(!!t.firstUuid && !!t.adjustOpen && !t.archived);
             rowEl.find('.target-adj-lr, .target-adj-sa, .target-spotter-azim')
                  .prop('disabled', !adjAllowed);
 
-            // History rendering
+            // Archived rows: hard-lock the static inputs (grid, alt, polar, battery).
+            rowEl.toggleClass('is-archived', !!t.archived);
+            if (t.archived) {
+                rowEl.find('.target-grid, .target-alt, .target-azim, .target-dist, .target-battery, .input-mode-toggle')
+                     .prop('disabled', true);
+            }
+
+            // History rendering — fire-mission history holds both fire-solution
+            // events and lifecycle events ('battery_offline' / 'battery_online').
+            // ALL entries are permanent — they form the auditable record of
+            // what happened to the mission over time.
             histCt.text(t.history.length);
             histBody.empty();
             t.history.forEach(function(h, idx) {
                 var isCurrent = (idx === t.history.length - 1);
+
+                if (h.kind === 'battery_offline') {
+                    histBody.append(
+                        '<div class="history-entry event permanent' + (isCurrent ? ' current' : '') + '">' +
+                            '<div><strong>Battery offline</strong> &mdash; at ' + util.escapeHtml(h.time) + '</div>' +
+                        '</div>'
+                    );
+                    return;
+                }
+                if (h.kind === 'battery_online') {
+                    histBody.append(
+                        '<div class="history-entry event permanent' + (isCurrent ? ' current' : '') + '">' +
+                            '<div><strong>Battery online</strong>' +
+                            (h.grid ? ' at grid ' + util.escapeHtml(h.grid) : '') +
+                            ' &mdash; at ' + util.escapeHtml(h.time) + '</div>' +
+                        '</div>'
+                    );
+                    return;
+                }
+
+                // Fire-solution events.
                 var cls = h.kind === 'adjustment' ? 'adjustment' : 'initial';
-                var lbl = h.kind === 'adjustment' ? ('Adjustment ' + idx) : 'Initial';
-                var status = h.deliveredAt
-                    ? '<span class="pill pill-delivered">DELIVERED</span> at ' + escapeHtml(h.deliveredAt)
-                    : (h.uuid ? '<span class="pill pill-sent">SENT</span> awaiting delivery receipt…'
-                               : '<span class="pill pill-sent">SENT</span> awaiting ack…');
+                var lbl = h.kind === 'adjustment'
+                    ? ('Adjustment ' + idx)
+                    : (h.isResend ? 'Resent' : 'Initial');
+                var status;
+                if (h.deliveredAt) {
+                    status = '<span class="pill pill-delivered">DELIVERED</span> at ' + util.escapeHtml(h.deliveredAt);
+                } else if (h.uuid) {
+                    status = '<span class="pill pill-sent">SENT</span> awaiting delivery receipt…';
+                } else {
+                    status = '<span class="pill pill-sent">SENT</span> awaiting ack…';
+                }
                 var adjStr = (h.adjustment && (h.adjustment.lr || h.adjustment.sa))
                     ? '<div>Adj: L/R ' + (h.adjustment.lr || 0) + 'm · S/A ' + (h.adjustment.sa || 0) + 'm</div>'
                     : '';
                 histBody.append(
                     '<div class="history-entry ' + cls + (isCurrent ? ' current' : '') + '">' +
-                        '<div><strong>' + lbl + '</strong> &mdash; sent ' + escapeHtml(h.sentAt) + ' · ' + status + '</div>' +
+                        '<div><strong>' + lbl + '</strong> &mdash; sent ' + util.escapeHtml(h.sentAt) + ' · ' + status + '</div>' +
                         adjStr +
                         (h.computed ? '<div>' + formatSolution(h.computed) + '</div>' : '') +
-                        (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + escapeHtml(h.uuid) + '</div>' : '') +
+                        (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + util.escapeHtml(h.uuid) + '</div>' : '') +
                     '</div>'
                 );
             });
@@ -2489,7 +3309,18 @@
             var t = spotterTargets.find(function(x) { return x.id === id; });
             if (!t || t.firstUuid || t.sendInFlight) return false;
             var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
-            var fm = computeFireMission(battery, t.gridExpanded, t.altitude);
+            // Short-circuit: if the battery isn't in the local list, fail
+            // immediately rather than waiting for the server's "battery offline"
+            // response (which would spin the retry loop for 2 s).
+            if (!battery) {
+                setTargetError(
+                    t,
+                    'Battery is offline — fire mission was not sent. Wait for it to come back online or pick another battery.'
+                );
+                renderSpotterTargets();
+                return false;
+            }
+            var fm = artycal.computeFireMission(battery, t.gridExpanded, t.altitude);
             if (!fm) return false;
             clearTargetError(t);
             // Remember the battery's grid/callsign so we can remap to a new
@@ -2521,8 +3352,10 @@
                     fn: function() { return broker.sendFireMission(bId, dist, dir, alt, cRef); },
                     deadline: Date.now() + 2000,
                     timer: null,
+                    batteryId: bId,
                 };
             })(t.batteryId, fm.distance, fm.direction, fm.targetAltitude, ref);
+            armSafetyTimer(ref);
             renderSpotterTargets();
             return true;
         }
@@ -2531,11 +3364,17 @@
             var t = spotterTargets.find(function(x) { return x.id === id; });
             if (!t || !t.firstUuid || t.sendInFlight) return false;
             if ((t.adjustmentsDelivered || 0) >= 3) return false;
-            // Don't send adjustments when the artillery has moved off-station —
-            // the math would be applied to a different battery position.
-            if (isBatteryGone(t)) return false;
             var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
-            var fm = computeAdjustedSolution(battery, t);
+            // Short-circuit: same rationale as the initial-send path.
+            if (!battery) {
+                setTargetError(
+                    t,
+                    'Battery is offline — adjustment was not sent. Wait for it to come back online.'
+                );
+                renderSpotterTargets();
+                return false;
+            }
+            var fm = artycal.computeAdjustedSolution(battery, t, spotterSelf.gridExpanded);
             if (!fm) {
                 alert('Cannot compute adjustment. Set the Spotter Grid (or this row’s Az→Target), and enter a non-zero Left/Right or Short/Add.');
                 return false;
@@ -2567,8 +3406,142 @@
                     fn: function() { return broker.sendFireMissionAdjust(bId, dist, dir, alt, fmUuid, cRef, adjN); },
                     deadline: Date.now() + 2000,
                     timer: null,
+                    batteryId: bId,
                 };
             })(t.batteryId, fm.distance, fm.direction, fm.targetAltitude, t.firstUuid, ref, adjNum);
+            armSafetyTimer(ref);
+            // The staged values are consumed by the send. Close the panel and
+            // clear the inputs immediately so the row reads as "in flight" —
+            // same UX as pressing Cancel. The captured adjustment is preserved
+            // in the pushed history entry above.
+            t.adjustOpen = false;
+            t.adjLR = null;
+            t.adjSA = null;
+            t.spotterAzimOverride = null;
+            renderSpotterTargets();
+            return true;
+        }
+
+        // Create a fresh queued target pre-populated with the SOURCE target's
+        // original fire-mission data (grid, altitude, polar inputs, label).
+        // The copy intentionally drops batteryId, history, adjustments, errors
+        // — the user picks a new battery and (re)sends from scratch. Available
+        // in any state the user can interact with (queued, sent, delivered,
+        // failed, offline, exhausted, etc.).
+        function copyToNewTarget(sourceId) {
+            var src = spotterTargets.find(function(x) { return x.id === sourceId; });
+            if (!src) return;
+            var t = {
+                id: nextTargetId++,
+                label: src.label ? (src.label + ' (copy)') : null,
+                labelIsCustom: !!src.label,
+                inputMode: src.inputMode || (spotterSelf.gridExpanded ? 'polar' : 'grid'),
+                gridInputRaw: src.gridInputRaw || '',
+                gridExpanded: src.gridExpanded || null,
+                altitude: src.altitude,
+                targetAzim: src.targetAzim,
+                targetDist: src.targetDist,
+                batteryId: null,
+                adjLR: null, adjSA: null,
+                spotterAzimOverride: null,
+                history: [],
+                firstUuid: null, fireMissionId: null,
+                adjustmentsDelivered: 0,
+                sendInFlight: false,
+            };
+            spotterTargets.push(t);
+            // Copying from an archived row should land the user back in the
+            // queue pane where the new entry lives — otherwise they'd appear
+            // to do nothing from the user's perspective.
+            if (spotterPane !== 'queue') {
+                spotterPane = 'queue';
+                $('.pane-tab-btn[data-spotter-pane]').each(function() {
+                    var active = $(this).attr('data-spotter-pane') === 'queue';
+                    $(this).toggleClass('active', active).attr('aria-selected', active ? 'true' : 'false');
+                });
+                $('.pane-controls[data-spotter-controls]').each(function() {
+                    $(this).toggle($(this).attr('data-spotter-controls') === 'queue');
+                });
+                $('#spotter-pane-queue').show();
+                $('#spotter-pane-archive').hide();
+            }
+            renderSpotterTargets();
+            // Scroll the new row into view and focus the battery picker so the
+            // user can immediately pick where to send it.
+            var row = $('.target-row[data-id="' + t.id + '"]');
+            if (row.length) {
+                row[0].scrollIntoView({behavior: 'smooth', block: 'nearest'});
+                row.find('.target-battery').focus();
+            }
+        }
+
+        // Resend the current fire mission to the relocated battery. Treats the
+        // re-send as a brand-new fire mission (new UUID, fresh adjustment
+        // budget) since the artillery client at the new grid has no memory of
+        // the previous mission. The previous mission's history is preserved.
+        // Resend: available on any sent row. Sends a fresh fire_mission with
+        // a NEW UUID at the battery's CURRENT grid (which may have silently
+        // moved since the original send — fire-mission math has already been
+        // recomputed against the new battery.grid via reconcileBatteryState).
+        // Each resend logs an entry in the mission history.
+        function resendFireMission(id) {
+            var t = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t || t.sendInFlight || !t.firstUuid) return false;
+            var battery = brokerBatteries.find(function(b) { return b.id === t.batteryId; });
+            if (!battery) {
+                setTargetError(
+                    t,
+                    'Battery is offline — cannot resend right now. Wait for it to come back online.'
+                );
+                renderSpotterTargets();
+                return false;
+            }
+            var fm = artycal.computeFireMission(battery, t.gridExpanded, t.altitude);
+            if (!fm) return false;
+            clearTargetError(t);
+            // Refresh the snapshot — battery may have moved since the original.
+            t.batteryGrid = battery.grid;
+            t.batteryCallsign = battery.callsign || null;
+            var ref = newClientRef();
+            t.history.push({
+                seq: t.history.length + 1,
+                kind: 'initial',
+                clientRef: ref,
+                adjustment: null,
+                computed: fm,
+                sentAt: new Date().toLocaleTimeString(),
+                deliveredAt: null,
+                uuid: null,
+                isResend: true,
+            });
+            t.sendInFlight = true;
+            // Dedicated resend path — the worker forwards with the same UUID
+            // so the artillery updates its existing record (clearing the
+            // Outdated badge and moving the row back to Fire Missions) rather
+            // than creating a brand-new card. The fireMissionUuid + the human
+            // 4-digit fireMissionId stay stable across the resend.
+            var stableUuid = t.firstUuid;
+            var ok = broker.sendFireMissionResend(t.batteryId, stableUuid, fm.distance, fm.direction, fm.targetAltitude, ref);
+            if (!ok) {
+                t.history.pop();
+                t.sendInFlight = false;
+                renderSpotterTargets();
+                alert('Cannot resend: not connected.');
+                return false;
+            }
+            pendingRetries[ref] = (function(bId, uuid, dist, dir, alt, cRef) {
+                return {
+                    fn: function() { return broker.sendFireMissionResend(bId, uuid, dist, dir, alt, cRef); },
+                    deadline: Date.now() + 2000,
+                    timer: null,
+                    batteryId: bId,
+                };
+            })(t.batteryId, stableUuid, fm.distance, fm.direction, fm.targetAltitude, ref);
+            armSafetyTimer(ref);
+            // Resend opens a new mission "epoch" — adjustment budget resets.
+            t.adjustmentsDelivered = 0;
+            t.adjustOpen = false;
+            t.adjLR = null; t.adjSA = null;
             renderSpotterTargets();
             return true;
         }
@@ -2601,19 +3574,164 @@
         });
 
         $('#btn-send-all-targets').click(function() {
-            var sentCount = 0;
+            // Group every ready, queued target by batteryId — each group
+            // becomes one fire_mission_batch message. This is more efficient
+            // on the wire and preserves a single ack/delivery for the group.
+            var groups = {};
             spotterTargets.forEach(function(t) {
                 if (t.firstUuid || t.sendInFlight) return;
                 if (!t.batteryId || !t.gridExpanded) return;
-                if (sendInitialFireMission(t.id)) sentCount++;
+                if (!groups[t.batteryId]) groups[t.batteryId] = [];
+                groups[t.batteryId].push(t);
             });
-            if (sentCount === 0) {
+            var batteryIds = Object.keys(groups);
+            if (batteryIds.length === 0) {
                 alert('No queued targets are ready to send (each needs a valid grid and a battery, and must not yet be delivered).');
+                return;
+            }
+            var sentAny = false;
+            batteryIds.forEach(function(batteryId) {
+                if (sendBatchFireMissions(batteryId, groups[batteryId])) sentAny = true;
+            });
+            if (!sentAny) {
+                // Every group was short-circuited (battery offline locally) or
+                // failed to send — per-target error banners already explain it.
+                renderSpotterTargets();
             }
         });
 
-        $('#btn-clear-sent-targets').click(function() {
-            spotterTargets = spotterTargets.filter(function(t) { return !t.firstUuid; });
+        // Send a batch of fresh fire missions for one battery. Mirrors
+        // sendInitialFireMission's reliability: short-circuit if the battery
+        // isn't in the local list, register a pendingRetries entry keyed on
+        // the batch's outer clientRef, and rollback the whole batch if no ack
+        // arrives within the deadline.
+        function sendBatchFireMissions(batteryId, targets) {
+            var battery = brokerBatteries.find(function(b) { return b.id === batteryId; });
+            if (!battery) {
+                targets.forEach(function(t) {
+                    setTargetError(
+                        t,
+                        'Battery is offline — fire mission was not sent. Wait for it to come back online or pick another battery.'
+                    );
+                });
+                renderSpotterTargets();
+                return false;
+            }
+
+            // Build the wire payload AND keep a parallel list of targets that
+            // resolve to a computable solution. Targets whose math fails are
+            // silently skipped (Send button on those individual rows is also
+            // disabled, so they shouldn't be reachable, but be defensive).
+            var missions = [];
+            var validTargets = [];
+            targets.forEach(function(t) {
+                var fm = artycal.computeFireMission(battery, t.gridExpanded, t.altitude);
+                if (!fm) return;
+                missions.push({
+                    distance: fm.distance,
+                    direction: fm.direction,
+                    targetAltitude: fm.targetAltitude,
+                    _computed: fm,
+                });
+                validTargets.push(t);
+            });
+            if (missions.length === 0) return false;
+
+            // Push the optimistic history entry on each target so the row
+            // shows "Sending…" immediately. If the batch fails, rollbackBatch
+            // splices them back out.
+            var batchRef = 'batch_' + newClientRef();
+            var memberRefs = [];
+            validTargets.forEach(function(t, i) {
+                var memberRef = newClientRef();
+                memberRefs.push(memberRef);
+                clearTargetError(t);
+                t.batteryGrid = battery.grid;
+                t.batteryCallsign = battery.callsign || null;
+                t.history.push({
+                    seq: t.history.length + 1,
+                    kind: 'initial',
+                    clientRef: memberRef,
+                    adjustment: null,
+                    computed: missions[i]._computed,
+                    sentAt: new Date().toLocaleTimeString(),
+                    deliveredAt: null,
+                    uuid: null,
+                });
+                t.sendInFlight = true;
+            });
+
+            // Strip the internal _computed marker before sending.
+            var wireMissions = missions.map(function(m) {
+                return {
+                    distance: m.distance,
+                    direction: m.direction,
+                    targetAltitude: m.targetAltitude,
+                };
+            });
+            var ok = broker.sendFireMissionBatch(batteryId, wireMissions, batchRef);
+            if (!ok) {
+                validTargets.forEach(function(t) {
+                    t.history.pop();
+                    t.sendInFlight = false;
+                });
+                renderSpotterTargets();
+                alert('Cannot send batch: not connected.');
+                return false;
+            }
+
+            // Save member refs so the ack can fan UUIDs out across them and
+            // rollback can splice them all on timeout.
+            pendingBatches[batchRef] = memberRefs;
+            pendingRetries[batchRef] = (function(bId, msns, bRef) {
+                return {
+                    fn: function() { return broker.sendFireMissionBatch(bId, msns, bRef); },
+                    deadline: Date.now() + 2000,
+                    timer: null,
+                    batteryId: bId,
+                };
+            })(batteryId, wireMissions, batchRef);
+            armSafetyTimer(batchRef);
+            renderSpotterTargets();
+            return true;
+        }
+
+        // "Archive Sent" archives ONLY targets whose last visible state is
+        // Delivered — anything mid-send, queued, with a staged change, with a
+        // transient error, or whose battery is offline is skipped (the user
+        // almost certainly still wants to act on those).
+        $('#btn-archive-sent-targets').click(function() {
+            spotterTargets.forEach(function(t) {
+                if (t.archived) return;
+                if (!t.firstUuid) return;       // not yet delivered
+                if (t.sendInFlight) return;     // currently transmitting
+                if (t.errorMessage) return;     // transient failure visible
+                if (isBatteryOffline(t)) return;
+                // Latest fire-solution must be delivered (not a sent-but-unconfirmed adjustment).
+                var last = lastSolutionEntry(t);
+                if (!last || !last.deliveredAt) return;
+                t.archived = true;
+                t.pendingRemoval = false;
+                t.adjustOpen = false;
+            });
+            renderSpotterTargets();
+        });
+
+        // Spotter sub-tab switching.
+        $(document).on('click', '.pane-tab-btn[data-spotter-pane]', function() {
+            var which = $(this).attr('data-spotter-pane');
+            if (spotterPane === which) return;
+            spotterPane = which;
+            $('.pane-tab-btn[data-spotter-pane]').each(function() {
+                var active = $(this).attr('data-spotter-pane') === which;
+                $(this).toggleClass('active', active).attr('aria-selected', active ? 'true' : 'false');
+            });
+            // Pane-wide controls follow the active tab.
+            $('.pane-controls[data-spotter-controls]').each(function() {
+                $(this).toggle($(this).attr('data-spotter-controls') === which);
+            });
+            $('#spotter-pane-queue').toggle(which === 'queue');
+            $('#spotter-pane-archive').toggle(which === 'archive');
             renderSpotterTargets();
         });
 
@@ -2623,7 +3741,7 @@
             var t = spotterTargets.find(function(x) { return x.id === id; });
             if (!t || t.firstUuid) return; // grid locked after delivery
             t.gridInputRaw = $(this).val().trim();
-            t.gridExpanded = expandGrid(t.gridInputRaw);
+            t.gridExpanded = artycal.expandGrid(t.gridInputRaw);
             updateTargetRow(id);
         });
         $(document).on('input', '.target-row .target-alt', function() {
@@ -2703,17 +3821,108 @@
             else newRow.find('.target-grid').focus();
         });
 
+        // Primary action button. data-mode dispatches:
+        //   send-initial   → send the queued fire mission
+        //   toggle-adjust  → open the adjustment panel
+        //   cancel-adjust  → close the panel AND clear typed adjustment values
         $(document).on('click', '.target-row .btn-target-send', function() {
-            var id = parseInt($(this).closest('.target-row').data('id'));
-            sendInitialFireMission(id);
+            var btn  = $(this);
+            var mode = btn.attr('data-mode');
+            var id   = parseInt(btn.closest('.target-row').data('id'));
+            var t    = spotterTargets.find(function(x) { return x.id === id; });
+            if (!t) return;
+            if (mode === 'send-initial') {
+                sendInitialFireMission(id);
+            } else if (mode === 'resend') {
+                resendFireMission(id);
+            } else if (mode === 'toggle-adjust') {
+                t.adjustOpen = true;
+                renderSpotterTargets();
+                var rowEl = $('.target-row[data-id="' + id + '"]');
+                rowEl.find('.target-adj-lr').focus();
+            } else if (mode === 'cancel-adjust') {
+                t.adjustOpen = false;
+                t.adjLR = null;
+                t.adjSA = null;
+                t.spotterAzimOverride = null;
+                renderSpotterTargets();
+            }
         });
-        $(document).on('click', '.target-row .btn-target-adjust', function() {
+
+        // Secondary "Send" button — only present when adjust panel is open
+        // and a valid solution is computable. Sends the adjustment.
+        $(document).on('click', '.target-row .btn-target-send-adjust', function() {
             var id = parseInt($(this).closest('.target-row').data('id'));
             sendAdjustment(id);
         });
-        $(document).on('click', '.target-row .btn-target-remove', function() {
-            var id = parseInt($(this).closest('.target-row').data('id'));
-            spotterTargets = spotterTargets.filter(function(t) { return t.id !== id; });
+
+        // Overflow menu (kebab) — toggle on button click; close on outside
+        // click or Esc; close on any menu item activation.
+        $(document).on('click', '.target-row .overflow-menu-btn', function(e) {
+            e.stopPropagation();
+            var list = $(this).siblings('.overflow-menu-list');
+            // Close other open menus first.
+            $('.overflow-menu-list.open').not(list).removeClass('open');
+            list.toggleClass('open');
+        });
+        $(document).on('click', '.target-row .overflow-menu-list', function(e) {
+            e.stopPropagation();
+        });
+        $(document).on('click', function() {
+            $('.target-row .overflow-menu-list.open').removeClass('open');
+        });
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                $('.target-row .overflow-menu-list.open').removeClass('open');
+            }
+        });
+        // Helper to look up the target the menu sits on and close the menu.
+        function menuTarget(el) {
+            var row = $(el).closest('.target-row');
+            $('.overflow-menu-list.open', row).removeClass('open');
+            return spotterTargets.find(function(x) { return x.id === parseInt(row.data('id')); });
+        }
+
+        // Menu actions:
+        $(document).on('click', '.target-row .menu-resend', function() {
+            var t = menuTarget(this);
+            if (t) resendFireMission(t.id);
+        });
+        $(document).on('click', '.target-row .menu-copy', function() {
+            var t = menuTarget(this);
+            if (t) copyToNewTarget(t.id);
+        });
+        $(document).on('click', '.target-row .menu-archive', function() {
+            var t = menuTarget(this);
+            if (!t || t.archived || !t.firstUuid) return;
+            t.archived = true;
+            t.pendingRemoval = false;
+            t.sendInFlight = false;
+            t.adjustOpen = false;
+            clearTargetError(t);
+            t.history.forEach(function(h) { stopDeliveryWatchdog(h); });
+            renderSpotterTargets();
+        });
+        $(document).on('click', '.target-row .menu-unarchive', function() {
+            var t = menuTarget(this);
+            if (!t || !t.archived) return;
+            t.archived = false;
+            t.pendingRemoval = false;
+            renderSpotterTargets();
+        });
+        // Remove: pre-send only — single click direct delete.
+        $(document).on('click', '.target-row .menu-remove', function() {
+            var t = menuTarget(this);
+            if (!t || t.archived || t.firstUuid || t.sendInFlight) return;
+            spotterTargets = spotterTargets.filter(function(x) { return x.id !== t.id; });
+            renderSpotterTargets();
+        });
+        // Delete: only on archived rows. Single click — the deliberate
+        // popout-open already counts as user intent.
+        $(document).on('click', '.target-row .menu-delete', function() {
+            var t = menuTarget(this);
+            if (!t || !t.archived) return;
+            spotterTargets = spotterTargets.filter(function(x) { return x.id !== t.id; });
             renderSpotterTargets();
         });
 
@@ -2733,7 +3942,7 @@
             if (!t) return;
             var current = t.label || defaultLabel(t);
             var wrap = $(this).closest('.target-label-wrap');
-            wrap.html('<input type="text" class="form-control form-control-sm target-label-edit" maxlength="48" value="' + escapeHtml(current) + '">');
+            wrap.html('<input type="text" class="form-control form-control-sm target-label-edit" maxlength="48" value="' + util.escapeHtml(current) + '">');
             var input = wrap.find('input');
             input.focus().select();
             function commit() {
@@ -2756,52 +3965,107 @@
 
         // ===== Artillery: incoming missions =====
         function renderMissionsList() {
+            var active   = artilleryMissions.filter(function(m) { return !m.archived; });
+            var archived = artilleryMissions.filter(function(m) { return  m.archived; });
+
+            // Tab counts on the pane selector.
+            $('#arty-missions-count').text(active.length   ? '(' + active.length   + ')' : '');
+            $('#arty-archive-count').text(archived.length ? '(' + archived.length + ')' : '');
+
             var container = $('#fire-missions-list');
-            var pending = artilleryMissions.filter(function(m) { return !m.fired; });
-            var fired   = artilleryMissions.filter(function(m) { return  m.fired; });
+            var archiveContainer = $('#fire-missions-archive');
 
-            $('#missions-stats').text(
-                artilleryMissions.length === 0
-                    ? ''
-                    : (pending.length + ' pending · ' + fired.length + ' fired')
-            );
-
-            if (artilleryMissions.length === 0) {
+            // Empty state for the Fire Missions pane (the "Waiting for…" hint).
+            if (active.length === 0) {
                 container.empty();
                 $('#arty-no-missions').show();
-                return;
+            } else {
+                $('#arty-no-missions').hide();
             }
-            $('#arty-no-missions').hide();
             container.empty();
+            archiveContainer.empty();
 
             var searchText = ($('#fm-search').val() || '').trim();
-            var filtered = searchText
-                ? artilleryMissions.filter(function(m) { return String(m.fireMissionId).indexOf(searchText) !== -1; })
-                : artilleryMissions;
+            var filteredActive = searchText
+                ? active.filter(function(m) { return String(m.fireMissionId).indexOf(searchText) !== -1; })
+                : active;
 
-            if (filtered.length === 0) {
+            if (filteredActive.length === 0 && active.length > 0) {
                 container.html('<p class="text-muted-themed">No missions match that filter.</p>');
-                return;
             }
 
-            filtered.forEach(function(m) {
+            // Archive pane has its own independent search input.
+            var archiveSearchText = ($('#fm-archive-search').val() || '').trim();
+            var filteredArchived = archiveSearchText
+                ? archived.filter(function(m) { return String(m.fireMissionId).indexOf(archiveSearchText) !== -1; })
+                : archived;
+
+            if (archived.length === 0) {
+                archiveContainer.html('<p class="text-muted-themed">No archived fire missions.</p>');
+            } else if (filteredArchived.length === 0) {
+                archiveContainer.html('<p class="text-muted-themed">No archived missions match that filter.</p>');
+            }
+
+            // Render to both containers (the appropriate pane is shown by the
+            // pane-tab handler; rendering both keeps the counts in sync).
+            renderArtilleryMissionGroup(container, filteredActive);
+            renderArtilleryMissionGroup(archiveContainer, filteredArchived);
+            return;
+        }
+        function renderArtilleryMissionGroup(container, missions) {
+            missions.forEach(function(m) {
                 var current = m.history[m.history.length - 1];
                 var roundedDist = Math.round(current.distance);
                 var roundedDir  = Math.round(current.direction); if (roundedDir === 6400) roundedDir = 0;
                 var altStr = (current.targetAltitude == null) ? '&mdash;' : (Math.round(current.targetAltitude) + 'm');
                 var rawAlt = (current.targetAltitude == null) ? '' : ((Math.round(current.targetAltitude * 100) / 100) + 'm');
-                var actionBtn = m.fired
-                    ? '<button class="btn btn-sm btn-outline-secondary btn-mission-unfire" data-fmid="' + escapeHtml(m.fireMissionId) + '" title="Mark not yet fired" aria-label="Undo"><span class="btn-icon"><i class="fa-solid fa-rotate-left"></i></span><span class="btn-text">Undo</span></button>'
-                    : '<button class="btn btn-sm btn-outline-primary btn-mission-fire"   data-fmid="' + escapeHtml(m.fireMissionId) + '" title="Mark as fired" aria-label="Mark as Fired"><span class="btn-icon"><i class="fa-solid fa-check"></i></span><span class="btn-text">Mark as Fired</span></button>';
-                var removeBtn = m.fired
-                    ? '<button class="btn btn-sm ' + (m.pendingRemoval ? 'btn-danger' : 'btn-outline-danger') + ' btn-mission-remove" data-fmid="' + escapeHtml(m.fireMissionId) + '" title="' + (m.pendingRemoval ? 'Click again to confirm removal' : 'Remove this fire mission') + '" aria-label="Remove"><span class="btn-icon"><i class="fa-solid fa-trash"></i></span><span class="btn-text">' + (m.pendingRemoval ? 'Confirm' : 'Remove') + '</span></button>'
+                // Fire toggle (Mark as Fired / Undo) is hidden on archived rows.
+                var actionBtn = m.archived
+                    ? ''
+                    : (m.fired
+                        ? '<button class="btn btn-sm btn-outline-secondary btn-mission-unfire" data-fmid="' + util.escapeHtml(m.fireMissionId) + '" title="Mark not yet fired" aria-label="Undo"><span class="btn-icon"><i class="fa-solid fa-rotate-left"></i></span><span class="btn-text">Undo</span></button>'
+                        : '<button class="btn btn-sm btn-outline-primary btn-mission-fire"   data-fmid="' + util.escapeHtml(m.fireMissionId) + '" title="Mark as fired" aria-label="Mark as Fired"><span class="btn-icon"><i class="fa-solid fa-check"></i></span><span class="btn-text">Mark as Fired</span></button>');
+                // Archive button: only after fired, single click. Replaces the
+                // old "Remove" button in the Fire Missions pane.
+                var archiveBtn = (!m.archived && m.fired)
+                    ? '<button class="btn btn-sm btn-outline-secondary btn-mission-archive" data-fmid="' + util.escapeHtml(m.fireMissionId) + '" title="Archive this fire mission" aria-label="Archive"><span class="btn-icon"><i class="fa-solid fa-box-archive"></i></span><span class="btn-text">Archive</span></button>'
+                    : '';
+                // Unarchive: hidden when the mission is "outdated" — i.e. its
+                // batteryGridAtReceive doesn't match the artillery's current
+                // grid. The lock is only cleared when a fresh fire_mission
+                // arrives with the same fireMissionId (see onFireMission).
+                var outdated = m.archived && m.batteryGridAtReceive &&
+                    m.batteryGridAtReceive !== artyLastOnlineGrid;
+                var unarchiveBtn = (m.archived && !outdated)
+                    ? '<button class="btn btn-sm btn-outline-warning btn-mission-unarchive" data-fmid="' + util.escapeHtml(m.fireMissionId) + '" title="Move back to the Fire Missions pane" aria-label="Unarchive"><span class="btn-icon"><i class="fa-solid fa-box-open"></i></span><span class="btn-text">Unarchive</span></button>'
+                    : '';
+                // Delete: ONLY available on archived rows, two-click confirm.
+                var deleteBtn = m.archived
+                    ? '<button class="btn btn-sm ' + (m.pendingRemoval ? 'btn-danger' : 'btn-outline-danger') + ' btn-mission-delete" data-fmid="' + util.escapeHtml(m.fireMissionId) + '" title="' + (m.pendingRemoval ? 'Click again to confirm deletion' : 'Delete this archived fire mission') + '" aria-label="Delete"><span class="btn-icon"><i class="fa-solid fa-trash"></i></span><span class="btn-text">' + (m.pendingRemoval ? 'Confirm' : 'Delete') + '</span></button>'
                     : '';
                 var firedNote = m.fired
-                    ? '<span style="font-size:11px; color:var(--input-group-text)">fired at ' + escapeHtml(m.firedAt) + '</span>'
+                    ? '<span style="font-size:11px; color:var(--input-group-text)">fired at ' + util.escapeHtml(m.firedAt) + '</span>'
                     : '';
-                var adjCount = m.history.filter(function(h) { return h.kind === 'adjustment'; }).length;
+                // Count adjustments AFTER the most-recent 'initial' entry —
+                // resends push a new 'initial' which starts a fresh adjustment
+                // budget, so historic adjustments from before the resend don't
+                // contribute to the displayed count.
+                var adjCount = 0;
+                for (var ci = m.history.length - 1; ci >= 0; ci--) {
+                    var ch = m.history[ci];
+                    if (ch.kind === 'initial') break;
+                    if (ch.kind === 'adjustment') adjCount++;
+                }
                 var adjBadge = adjCount > 0
                     ? '<span class="pill pill-pending">' + adjCount + ' adj</span>'
+                    : '';
+                // Outdated badge — battery has moved since this mission was
+                // received, so the displayed solution is no longer valid for
+                // this position. Spotter must resend (a fresh fire_mission
+                // arrives with the same fireMissionId → mission becomes valid
+                // again and the badge clears).
+                var movedBadge = (m.batteryGridAtReceive && m.batteryGridAtReceive !== artyLastOnlineGrid)
+                    ? '<span class="pill pill-offline" title="Battery has moved since this mission was received. Spotter must send a fresh solution to re-engage.">Outdated</span>'
                     : '';
                 var historyEntries = '';
                 m.history.forEach(function(h, idx) {
@@ -2815,11 +4079,11 @@
                     var ealt = (h.targetAltitude == null) ? '&mdash;' : (Math.round(h.targetAltitude));
                     historyEntries +=
                         '<div class="history-entry ' + entryCls + (isCurrent ? ' current' : '') + '">' +
-                            '<div><strong>' + lbl + '</strong> &mdash; received ' + escapeHtml(h.time) + (isCurrent ? ' (latest)' : '') + '</div>' +
+                            '<div><strong>' + lbl + '</strong> &mdash; received ' + util.escapeHtml(h.time) + (isCurrent ? ' (latest)' : '') + '</div>' +
                             '<div>Dis: ' + ed + 'm / Az: ' + ea + 'mil / Alt: ' + ealt + 'm</div>' +
                             '<div style="font-size:11px; color:var(--input-group-text)">Raw: ' + (Math.round(h.distance * 100) / 100) + 'm / ' + (Math.round(h.direction * 100) / 100) + 'mil' +
                                 (h.targetAltitude == null ? '' : (' / ' + (Math.round(h.targetAltitude * 100) / 100) + 'm')) + '</div>' +
-                            (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + escapeHtml(h.uuid) + '</div>' : '') +
+                            (h.uuid ? '<div style="font-size:10px; color:var(--input-group-text); font-family:monospace">uuid ' + util.escapeHtml(h.uuid) + '</div>' : '') +
                         '</div>';
                 });
 
@@ -2831,12 +4095,13 @@
                                     '<span class="btn-icon">' + (m.fired ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-triangle-exclamation"></i>') + '</span>' +
                                     '<span class="btn-text"> ' + (m.fired ? 'FIRED' : 'PENDING') + '</span>' +
                                 '</span>' +
-                                '<span class="fm-id-badge">ID: ' + escapeHtml(m.fireMissionId) + '</span>' +
-                                '<span style="font-size:11px; color:var(--input-group-text)">received ' + escapeHtml(m.receivedAt) + '</span>' +
+                                '<span class="fm-id-badge">ID: ' + util.escapeHtml(m.fireMissionId) + '</span>' +
+                                '<span style="font-size:11px; color:var(--input-group-text)">received ' + util.escapeHtml(m.receivedAt) + '</span>' +
                                 adjBadge +
                                 firedNote +
+                                movedBadge +
                             '</div>' +
-                            '<div class="fm-head-actions">' + actionBtn + removeBtn + '</div>' +
+                            '<div class="fm-head-actions">' + actionBtn + archiveBtn + unarchiveBtn + deleteBtn + '</div>' +
                         '</div>' +
                         '<div><strong>Dis: ' + roundedDist + 'm / Az: ' + roundedDir + 'mil / Alt: ' + altStr + '</strong></div>' +
                         '<div style="font-size:11px; color:var(--input-group-text)">Raw: ' + (Math.round(current.distance * 100) / 100) + 'm / ' + (Math.round(current.direction * 100) / 100) + 'mil / ' + rawAlt + '</div>' +
@@ -2869,23 +4134,72 @@
             renderMissionsList();
         });
 
-        $(document).on('click', '.btn-mission-remove', function() {
+        // Archive: single click. Available on fired missions; moves them from
+        // the Fire Missions pane to the Archive pane.
+        $(document).on('click', '.btn-mission-archive', function() {
             var m = findMissionByFmId($(this).attr('data-fmid'));
-            if (!m) return;
+            if (!m || m.archived) return;
+            m.archived = true;
+            m.pendingRemoval = false;
+            renderMissionsList();
+        });
+        // Unarchive: returns a mission from Archive back to Fire Missions
+        // with its prior fired state preserved. The displayed solution still
+        // reflects whatever was last received — if the battery has since
+        // moved, the row appears in the Archive pane with an "Outdated" badge
+        // and is locked from unarchive until the spotter sends a fresh
+        // fire_mission with the same fireMissionId (handled in onFireMission).
+        $(document).on('click', '.btn-mission-unarchive', function() {
+            var m = findMissionByFmId($(this).attr('data-fmid'));
+            if (!m || !m.archived) return;
+            // Defense-in-depth: the Unarchive button is hidden when the
+            // mission's batteryGridAtReceive doesn't match the current grid,
+            // but skip here too in case the handler is reached some other way.
+            if (m.batteryGridAtReceive && m.batteryGridAtReceive !== artyLastOnlineGrid) return;
+            m.archived = false;
+            m.pendingRemoval = false;
+            renderMissionsList();
+        });
+        // Delete: only exists on archived missions; two-click confirm. Auto-
+        // resets the pending state after 4 seconds if not confirmed.
+        $(document).on('click', '.btn-mission-delete', function() {
+            var m = findMissionByFmId($(this).attr('data-fmid'));
+            if (!m || !m.archived) return;
             if (m.pendingRemoval) {
                 artilleryMissions = artilleryMissions.filter(function(x) { return x.fireMissionId !== m.fireMissionId; });
                 renderMissionsList();
-            } else {
-                m.pendingRemoval = true;
-                renderMissionsList();
-                // Auto-reset confirmation state after 4 seconds if not acted on.
-                setTimeout(function() {
-                    if (m.pendingRemoval) { m.pendingRemoval = false; renderMissionsList(); }
-                }, 4000);
+                return;
             }
+            m.pendingRemoval = true;
+            renderMissionsList();
+            setTimeout(function() {
+                if (m.pendingRemoval) { m.pendingRemoval = false; renderMissionsList(); }
+            }, 4000);
         });
+        // "Archive Fired" replaces the old "Clear Fired" — moves every fired
+        // mission to the Archive pane instead of deleting outright.
         $('#btn-clear-fired').click(function() {
-            artilleryMissions = artilleryMissions.filter(function(m) { return !m.fired; });
+            artilleryMissions.forEach(function(m) {
+                if (m.fired && !m.archived) m.archived = true;
+            });
+            renderMissionsList();
+        });
+
+        // Artillery sub-tab switching.
+        $(document).on('click', '.pane-tab-btn[data-arty-pane]', function() {
+            var which = $(this).attr('data-arty-pane');
+            if (artyPane === which) return;
+            artyPane = which;
+            $('.pane-tab-btn[data-arty-pane]').each(function() {
+                var active = $(this).attr('data-arty-pane') === which;
+                $(this).toggleClass('active', active).attr('aria-selected', active ? 'true' : 'false');
+            });
+            // Pane-wide controls follow the active tab.
+            $('.pane-controls[data-arty-controls]').each(function() {
+                $(this).toggle($(this).attr('data-arty-controls') === which);
+            });
+            $('#arty-pane-missions').toggle(which === 'missions');
+            $('#arty-pane-archive').toggle(which === 'archive');
             renderMissionsList();
         });
 
@@ -2913,10 +4227,34 @@
             }
         });
 
+        // Archive-pane search: same mechanic as the Fire Missions search, but
+        // independent state so the two filters don't clobber each other.
+        $(document).on('input', '#fm-archive-search', function() {
+            renderMissionsList();
+        });
+        $('#btn-fm-archive-search').click(function() {
+            var box = $('#fm-archive-search-expand-box');
+            if (box.hasClass('open')) {
+                box.removeClass('open');
+                $('#fm-archive-search').val('');
+                renderMissionsList();
+            } else {
+                box.addClass('open');
+                setTimeout(function() { $('#fm-archive-search').focus(); }, 210);
+            }
+        });
+        $(document).on('keydown', '#fm-archive-search', function(e) {
+            if (e.key === 'Escape') {
+                $('#fm-archive-search-expand-box').removeClass('open');
+                $(this).val('');
+                renderMissionsList();
+            }
+        });
+
     }); // end $(document).ready
 
     // ========================
-    // THEME TOGGLE
+    // SETTINGS  (theme + screen-awake)
     // ========================
     function getCookie(name) {
         var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -2927,23 +4265,130 @@
         d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
         document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
     }
-    function getCurrentTheme() {
-        return document.documentElement.getAttribute('data-theme') || 'light';
-    }
-    function updateToggleIcon() {
-        document.getElementById('theme-toggle').innerHTML = getCurrentTheme() === 'dark' ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
-    }
-    updateToggleIcon();
-    document.getElementById('theme-toggle').addEventListener('click', function() {
-        var newTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
-        if (newTheme === 'light') {
-            document.documentElement.removeAttribute('data-theme');
+
+    // Settings state — persisted to localStorage. Theme is also written to a
+    // cookie for compatibility with the previous version of the app.
+    var SETTINGS_KEY = 'artyCalc.settings';
+    var settings = {
+        theme: 'dark',          // 'dark' | 'light'
+        screenAwake: true,      // request a screen wake lock on Spotter / Artillery views
+    };
+    try {
+        var stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+        if (stored && typeof stored === 'object') {
+            if (stored.theme === 'dark' || stored.theme === 'light') settings.theme = stored.theme;
+            if (typeof stored.screenAwake === 'boolean') settings.screenAwake = stored.screenAwake;
         } else {
-            document.documentElement.setAttribute('data-theme', newTheme);
+            // First run: migrate any pre-existing theme cookie.
+            var legacyTheme = getCookie('theme');
+            if (legacyTheme === 'light' || legacyTheme === 'dark') settings.theme = legacyTheme;
         }
-        setCookie('theme', newTheme, 365);
-        updateToggleIcon();
+    } catch (e) {}
+    function saveSettings() {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+    }
+
+    function applyTheme(theme) {
+        if (theme === 'light') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', 'dark');
+        setCookie('theme', theme, 365);
+        settings.theme = theme;
+        saveSettings();
+        // Reflect into the settings menu.
+        var icon = document.getElementById('setting-theme-icon');
+        var label = document.getElementById('setting-theme-label');
+        if (icon)  icon.innerHTML  = theme === 'dark' ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+        if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    }
+
+    // ===== Screen Wake Lock =====
+    // Held only while one of the operational views (Spotter / Artillery) is
+    // active AND the user has the setting on. Browsers auto-release the lock
+    // when the tab is hidden — we re-acquire on visibility return.
+    var wakeLock = null;
+    var wakeLockSupported = ('wakeLock' in navigator);
+    function isOperationalViewActive() {
+        var arty = document.getElementById('broker-arty-view');
+        var spot = document.getElementById('broker-spotter-view');
+        return (arty && arty.offsetParent !== null) || (spot && spot.offsetParent !== null);
+    }
+    async function requestWakeLock() {
+        if (!wakeLockSupported || wakeLock) return;
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', function() { wakeLock = null; });
+        } catch (e) {
+            // Common reasons: not in a user-gesture, page hidden, permission denied.
+        }
+    }
+    async function releaseWakeLock() {
+        if (!wakeLock) return;
+        try { await wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+    }
+    function refreshWakeLock() {
+        if (settings.screenAwake && isOperationalViewActive() && !document.hidden) {
+            requestWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+    }
+    // Expose for the in-page script to call after view transitions.
+    window.refreshWakeLock = refreshWakeLock;
+
+    document.addEventListener('visibilitychange', function() {
+        // Browsers release the lock automatically when the tab hides. Re-acquire
+        // on return so the screen stays on during active use.
+        if (!document.hidden) refreshWakeLock();
     });
+
+    // ===== Settings menu wiring =====
+    applyTheme(settings.theme);
+    (function() {
+        var awakeBtn = document.getElementById('setting-screen-awake');
+        awakeBtn.classList.toggle('on', settings.screenAwake);
+        awakeBtn.setAttribute('aria-checked', settings.screenAwake ? 'true' : 'false');
+
+        document.getElementById('settings-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            var menu = document.getElementById('settings-menu');
+            var nowOpen = menu.classList.toggle('open');
+            this.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
+        });
+        document.getElementById('settings-menu').addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+        document.addEventListener('click', function() {
+            var menu = document.getElementById('settings-menu');
+            if (menu.classList.contains('open')) {
+                menu.classList.remove('open');
+                document.getElementById('settings-toggle').setAttribute('aria-expanded', 'false');
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            var menu = document.getElementById('settings-menu');
+            if (menu.classList.contains('open')) {
+                menu.classList.remove('open');
+                document.getElementById('settings-toggle').setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        document.getElementById('setting-theme-btn').addEventListener('click', function() {
+            applyTheme(settings.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        awakeBtn.addEventListener('click', function() {
+            settings.screenAwake = !settings.screenAwake;
+            this.classList.toggle('on', settings.screenAwake);
+            this.setAttribute('aria-checked', settings.screenAwake ? 'true' : 'false');
+            saveSettings();
+            refreshWakeLock();
+        });
+    }());
+
+    // Initial wake-lock evaluation (no-op until user enters a role view).
+    refreshWakeLock();
     </script>
 </body>
 </html>

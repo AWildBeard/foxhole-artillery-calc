@@ -1165,7 +1165,7 @@
                     <span class="input-group-text" style="width:5.5em">Correction</span>
                 </div>
                 <input id="input_art_corr_dir" type="number" inputmode="decimal" class="form-control" tabindex="53" placeholder="left/right in m (negative=left, optional)" aria-label="left/right Correction in m (negative=left, optional)">
-                <input id="input_art_corr_dist" type="number" inputmode="decimal" class="form-control" tabindex="54" placeholder="short/add in m (negative=short, optional)" aria-label="short/add Correction in m (negative=short, optional)">
+                <input id="input_art_corr_dist" type="number" inputmode="decimal" class="form-control" tabindex="54" placeholder="drop/add in m (negative=drop, optional)" aria-label="drop/add Correction in m (negative=drop, optional)">
                 <div class="input-group-append">
                     <span class="input-group-text">meters (viewed from spotter)</span>
                 </div>
@@ -2964,8 +2964,8 @@
                             '</div>' +
                             '<div class="col-md-4 px-md-1">' +
                                 '<div class="input-group input-group-sm mb-1">' +
-                                    '<div class="input-group-prepend"><span class="input-group-text">Short/Wide</span></div>' +
-                                    '<input type="number" inputmode="numeric" maxlength="4" class="form-control target-adj-sa" placeholder="short = neg" value="' + (t.adjSA == null ? '' : util.escapeHtml(String(t.adjSA))) + '">' +
+                                    '<div class="input-group-prepend"><span class="input-group-text">Drop/Add</span></div>' +
+                                    '<input type="number" inputmode="numeric" maxlength="4" class="form-control target-adj-sa" placeholder="drop = neg" value="' + (t.adjSA == null ? '' : util.escapeHtml(String(t.adjSA))) + '">' +
                                     '<div class="input-group-append"><span class="input-group-text">m</span></div>' +
                                 '</div>' +
                             '</div>' +
@@ -3288,7 +3288,7 @@
                     status = '<span class="pill pill-sent">SENT</span> awaiting ack…';
                 }
                 var adjStr = (h.adjustment && (h.adjustment.lr || h.adjustment.sa))
-                    ? '<div>Adj: L/R ' + (h.adjustment.lr || 0) + 'm · S/A ' + (h.adjustment.sa || 0) + 'm</div>'
+                    ? '<div>Adj: L/R ' + (h.adjustment.lr || 0) + 'm · D/A ' + (h.adjustment.sa || 0) + 'm</div>'
                     : '';
                 histBody.append(
                     '<div class="history-entry ' + cls + (isCurrent ? ' current' : '') + '">' +
@@ -3376,7 +3376,7 @@
             }
             var fm = artycal.computeAdjustedSolution(battery, t, spotterSelf.gridExpanded);
             if (!fm) {
-                alert('Cannot compute adjustment. Set the Spotter Grid (or this row’s Az→Target), and enter a non-zero Left/Right or Short/Add.');
+                alert('Cannot compute adjustment. Set the Spotter Grid (or this row’s Az→Target), and enter a non-zero Left/Right or Drop/Add.');
                 return false;
             }
             clearTargetError(t);
